@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { apiPatch } from "@/lib/api";
 import { useAppConfig, useAuth } from "@/hooks/useAuth";
 import { ttsSupported, useVoice } from "@/hooks/useVoice";
-import HudBackground from "@/components/HudBackground";
 import type { User } from "@/types";
 
 export default function Settings() {
@@ -50,42 +49,38 @@ export default function Settings() {
         voice_name: voiceName,
       });
       qc.setQueryData(["me"], updated);
-      toast.success("Persona configuration saved");
+      toast.success("Settings saved");
     } catch {
-      toast.error("Could not save configuration");
+      toast.error("Could not save settings");
     } finally {
       setSaving(false);
     }
   };
 
   const field =
-    "w-full rounded-md border border-[#1d2c44] bg-[#0a0e17] px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus:border-[#3ec6ff]";
+    "w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm outline-none transition-colors duration-200 focus:border-[#d5cfc4]";
+  const card = "rounded-xl border border-border bg-card p-6";
 
   return (
-    <div className="relative min-h-screen bg-background px-6 py-10">
-      <HudBackground />
-      <div className="relative z-10 mx-auto max-w-2xl">
+    <div className="min-h-screen bg-background px-6 py-10">
+      <div className="mx-auto max-w-2xl">
         <Link
           to="/"
           data-testid="back-to-chat-link"
-          className="mb-6 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.25em] text-[#5c728c] transition-colors duration-200 hover:text-[#3ec6ff]"
+          className="mb-6 inline-flex items-center gap-2 text-[12.5px] text-muted-foreground transition-colors duration-200 hover:text-foreground"
         >
-          <ArrowLeft className="h-3.5 w-3.5" /> back to console
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to chat
         </Link>
 
-        <h1 className="vx-glow-text font-heading text-2xl tracking-[0.25em] text-[#3ec6ff]">
-          CONFIGURATION
-        </h1>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">Settings</h1>
 
-        <section className="vx-glass mt-6 space-y-4 rounded-xl p-6" data-testid="persona-section">
-          <h2 className="font-mono text-[11px] uppercase tracking-[0.3em] text-[#7f96b3]">
-            Persona
-          </h2>
+        <section className={`mt-6 space-y-4 ${card}`} data-testid="persona-section">
+          <h2 className="text-[13px] font-semibold">Persona</h2>
           <textarea
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
             rows={5}
-            placeholder="Operator directives — define personality, tone and default behaviour."
+            placeholder="Custom instructions — personality, tone, default behaviour."
             data-testid="system-prompt-input"
             className={`${field} resize-none`}
           />
@@ -117,8 +112,8 @@ export default function Settings() {
           </div>
         </section>
 
-        <section className="vx-glass mt-4 space-y-4 rounded-xl p-6" data-testid="voice-section">
-          <h2 className="font-mono text-[11px] uppercase tracking-[0.3em] text-[#7f96b3]">Voice</h2>
+        <section className={`mt-4 space-y-4 ${card}`} data-testid="voice-section">
+          <h2 className="text-[13px] font-semibold">Voice</h2>
           {ttsSupported() ? (
             <>
               <select
@@ -134,51 +129,70 @@ export default function Settings() {
                   </option>
                 ))}
               </select>
-              <label className="flex items-center gap-3 text-sm text-[#a9c2da]">
+              <label className="flex items-center gap-3 text-sm">
                 <input
                   type="checkbox"
                   checked={autoSpeak}
                   onChange={(e) => setAutoSpeak(e.target.checked)}
                   data-testid="auto-speak-checkbox"
-                  className="h-4 w-4 accent-[#3ec6ff]"
+                  className="h-4 w-4 accent-[#b8552f]"
                 />
-                Speak responses automatically
+                Read replies aloud automatically
               </label>
               <button
-                onClick={() => voice.speak("Voice system online. All modules nominal.", voiceName)}
+                onClick={() => voice.speak("Voice output is working.", voiceName)}
                 data-testid="test-voice-button"
-                className="rounded-md border border-[#1d2c44] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] text-[#7f96b3] transition-colors duration-200 hover:border-[#3ec6ff] hover:text-[#3ec6ff]"
+                className="rounded-lg border border-border px-3 py-1.5 text-[12.5px] transition-colors duration-200 hover:bg-secondary"
               >
-                test voice
+                Test voice
               </button>
             </>
           ) : (
-            <p className="text-sm text-[#ffb03e]">
+            <p className="text-sm text-muted-foreground">
               Speech synthesis is not available in this browser — voice output is disabled.
             </p>
           )}
         </section>
 
-        <section className="vx-glass mt-4 rounded-xl p-6" data-testid="system-section">
-          <h2 className="font-mono text-[11px] uppercase tracking-[0.3em] text-[#7f96b3]">
-            System state
-          </h2>
-          <dl className="mt-3 grid grid-cols-2 gap-y-2 font-mono text-[11px] text-[#8fa6c0]">
-            <dt className="text-[#5c728c]">Account</dt>
+        <section className={`mt-4 ${card}`} data-testid="models-section">
+          <h2 className="text-[13px] font-semibold">Models</h2>
+          <p className="mt-1 text-[12.5px] text-muted-foreground">
+            Tier 1 is free and open to guests. Tiers 2–5 need an account; paid plans are not
+            connected yet, so every tier is currently available to signed-in users.
+          </p>
+          <ul className="mt-4 space-y-2.5">
+            {(config?.models ?? []).map((m) => (
+              <li key={m.id} className="flex items-start gap-3" data-testid={`model-row-${m.id}`}>
+                <span className="mt-0.5 w-12 shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  tier {m.tier}
+                </span>
+                <span>
+                  <span className="text-[13.5px] font-medium">{m.name}</span>
+                  <span className="block text-[12.5px] text-muted-foreground">{m.tagline}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className={`mt-4 ${card}`} data-testid="system-section">
+          <h2 className="text-[13px] font-semibold">System</h2>
+          <dl className="mt-3 grid grid-cols-2 gap-y-2 text-[12.5px]">
+            <dt className="text-muted-foreground">Account</dt>
             <dd data-testid="settings-email">{user?.email ?? "—"}</dd>
-            <dt className="text-[#5c728c]">Brain provider</dt>
+            <dt className="text-muted-foreground">Provider</dt>
             <dd data-testid="settings-provider">{config?.provider ?? "—"}</dd>
-            <dt className="text-[#5c728c]">Model</dt>
-            <dd>{config?.model ?? "—"}</dd>
-            <dt className="text-[#5c728c]">Provider connected</dt>
-            <dd style={{ color: config?.provider_ready ? "#43e6b5" : "#ffb03e" }}>
+            <dt className="text-muted-foreground">Provider connected</dt>
+            <dd className={config?.provider_ready ? "text-[#3f6b45]" : "text-clay"}>
               {config?.provider_ready ? "yes" : "no — mock responder active"}
             </dd>
             {config &&
               Object.entries(config.features).map(([k, v]) => (
                 <div key={k} className="contents">
-                  <dt className="text-[#5c728c]">{k}</dt>
-                  <dd style={{ color: v ? "#43e6b5" : "#5c728c" }}>{v ? "enabled" : "disabled"}</dd>
+                  <dt className="text-muted-foreground">{k.replace(/_/g, " ")}</dt>
+                  <dd className={v ? "text-[#3f6b45]" : "text-muted-foreground"}>
+                    {v ? "enabled" : "disabled"}
+                  </dd>
                 </div>
               ))}
           </dl>
@@ -188,9 +202,9 @@ export default function Settings() {
           onClick={save}
           disabled={saving}
           data-testid="save-settings-button"
-          className="mt-6 rounded-md bg-[#3ec6ff] px-6 py-2.5 font-mono text-xs uppercase tracking-[0.3em] text-[#04121c] transition-all duration-200 hover:shadow-[0_0_24px_-6px_#3ec6ff] disabled:opacity-50"
+          className="mt-6 rounded-lg bg-clay px-5 py-2.5 text-sm font-medium text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:opacity-50"
         >
-          {saving ? "saving…" : "save"}
+          {saving ? "Saving…" : "Save"}
         </button>
       </div>
     </div>

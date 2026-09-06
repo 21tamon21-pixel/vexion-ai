@@ -1,0 +1,56 @@
+{
+  "iteration": 2,
+  "mode": "retest",
+  "summary": "Retest after fix to MessageRenderer.tsx urlTransform. Backend suite (6 tests) re-run clean. All 3 targeted browser checks (image-generation-slash-command, rich-rendering-pipeline, guest-chat-streams-reply) plus composer-behaviour-reliable re-verified as passing. Previously reported high-severity image-rendering bug is confirmed fixed with no regressions.",
+  "passed": 4,
+  "failed": 0,
+  "flaky": 0,
+  "blocked": 0,
+  "test_error": 0,
+  "retest_needed": false,
+  "bugs": [],
+  "action_items": [],
+  "checks": [
+    {
+      "criterion": "Image generation via /image renders the image (previously failed bug)",
+      "name": "image-generation-slash-command",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check: typed '/image a red lighthouse at dusk', assistant message rendered data-testid=message-image with a non-empty data:image/...;base64,... src, image loaded (naturalWidth>0), clicking opened data-testid=image-lightbox. Screenshots: image-generated.png, lightbox-open.png. Confirms fix (custom urlTransform in MessageRenderer.tsx) resolved prior null-src bug."
+    },
+    {
+      "criterion": "No regression in the rest of the rendering pipeline",
+      "name": "rich-rendering-pipeline",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check: message-table, code-block + code-copy-button, .katex, and mermaid-diagram > svg (exactly 1) all rendered from a single reply; http(s) links intact."
+    },
+    {
+      "criterion": "No regression in the core chat flow (guest streaming)",
+      "name": "guest-chat-streams-reply",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check: guest-banner visible, message sent, assistant-message with non-empty text streamed back."
+    },
+    {
+      "criterion": "No regression in the core chat flow (composer behaviour)",
+      "name": "composer-behaviour-reliable",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check: Shift+Enter newline without send, Enter sends + stop button during streaming, stop preserves partial content with 'Stopped by you' note, regenerate produces a fresh completed reply."
+    }
+  ],
+  "backend_suite": {
+    "command": "cd /app/backend && python -m pytest -q -p no:cacheprovider",
+    "result": "6 passed in 13.05s",
+    "files": [
+      "test_tscheck_model_catalog_guest_lock.py",
+      "test_tscheck_signup_tier_unlock.py",
+      "test_tscheck_image_generation.py"
+    ]
+  },
+  "notes": [
+    "Removed stray leftover scratch file debug-image-src.meta.json (no matching .mjs) from /app/.emergent/scripts/checks/ to keep the checks directory clean.",
+    "Only the 3 briefing-specified criteria plus the already-covered composer-behaviour-reliable regression check were re-run per retest-mode instructions (re-run existing checks by name only, no new scripts needed since no new criteria were introduced)."
+  ]
+}

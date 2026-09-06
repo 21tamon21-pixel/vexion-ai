@@ -23,6 +23,18 @@ function splitReasoning(text: string): { reasoning: string | null; body: string 
   return { reasoning: match[1].trim(), body: text.replace(match[0], "").trim() };
 }
 
+/**
+ * react-markdown's default urlTransform drops any URL whose protocol is not
+ * http/https/mailto/etc — which silently empties the `data:` URLs used by
+ * generated images. Allow data:image/* explicitly and keep everything else
+ * (notably javascript:) blocked.
+ */
+function urlTransform(url: string): string {
+  if (/^data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,/i.test(url)) return url;
+  if (/^(https?:|mailto:|tel:|#|\/|\.)/i.test(url)) return url;
+  return "";
+}
+
 function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
   return (
     <div
@@ -33,13 +45,13 @@ function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: ()
       aria-label={alt || "Image preview"}
     >
       <button
-        className="absolute right-6 top-6 text-[#7f96b3] transition-colors hover:text-[#3ec6ff]"
+        className="absolute right-6 top-6 text-white/80 transition-colors hover:text-white"
         aria-label="Close preview"
         data-testid="image-lightbox-close"
       >
         <X className="h-5 w-5" />
       </button>
-      <img src={src} alt={alt} className="max-h-full max-w-full rounded-md" />
+      <img src={src} alt={alt} className="max-h-full max-w-full rounded-lg" />
     </div>
   );
 }
@@ -57,21 +69,21 @@ export default function MessageRenderer({ content }: { content: string }) {
   return (
     <div className="vx-md" data-testid="message-renderer">
       {reasoning && (
-        <div className="rounded-md border border-[#1d2c44] bg-[#0b111c]">
+        <div className="rounded-xl border border-border bg-muted/50">
           <button
             onClick={() => setShowReasoning((v) => !v)}
             data-testid="reasoning-toggle"
-            className="flex w-full items-center gap-2 px-3 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-[#7f96b3] transition-colors duration-200 hover:text-[#3ec6ff]"
+            className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-muted-foreground transition-colors duration-200 hover:text-foreground"
           >
             <ChevronRight
               className={`h-3 w-3 transition-transform duration-200 ${showReasoning ? "rotate-90" : ""}`}
             />
-            {showReasoning ? "hide reasoning" : "show reasoning"}
+            {showReasoning ? "Hide reasoning" : "Show reasoning"}
           </button>
           {showReasoning && (
             <pre
               data-testid="reasoning-body"
-              className="whitespace-pre-wrap border-t border-[#1d2c44] px-3 py-2 font-mono text-xs text-[#8fa6c0]"
+              className="whitespace-pre-wrap border-t border-border px-3 py-2 font-mono text-xs text-muted-foreground"
             >
               {reasoning}
             </pre>
@@ -80,6 +92,7 @@ export default function MessageRenderer({ content }: { content: string }) {
       )}
 
       <Markdown
+        urlTransform={urlTransform}
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex, [rehypeHighlight, { ignoreMissing: true, detect: true }]]}
         components={{
@@ -109,11 +122,11 @@ export default function MessageRenderer({ content }: { content: string }) {
               alt={alt ?? ""}
               data-testid="message-image"
               onClick={() => setZoom({ src: typeof src === "string" ? src : "", alt: alt ?? "" })}
-              className="max-h-96 cursor-zoom-in rounded-md border border-[#1d2c44] transition-transform duration-200 hover:scale-[1.01]"
+              className="max-h-96 cursor-zoom-in rounded-xl border border-border transition-opacity duration-200 hover:opacity-95"
             />
           ),
           table: ({ children }) => (
-            <div className="vx-scroll overflow-x-auto rounded-md border border-[#1d2c44]">
+            <div className="vx-scroll overflow-x-auto rounded-xl border border-border">
               <table data-testid="message-table">{children}</table>
             </div>
           ),

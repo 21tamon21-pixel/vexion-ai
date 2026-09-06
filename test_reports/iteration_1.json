@@ -1,0 +1,100 @@
+{
+  "iteration": 1,
+  "summary": "8 acceptance criteria covered with 6 backend tests (2 files split across a shared model-catalog file, plus signup/tier-unlock and image-generation files -> actually 3 backend test files, 6 test functions) and 8 browser checks. 7 browser checks passed; 1 failed reproducibly (image rendering) with backend confirmed healthy.",
+  "passed": 13,
+  "failed": 1,
+  "flaky": 0,
+  "blocked": 0,
+  "test_error": 0,
+  "retest_needed": true,
+  "bugs": [
+    {
+      "severity": "high",
+      "criterion": "Image generation via /image",
+      "description": "POST /api/images/generate correctly returns a valid data:image/jpeg;base64,... URL (~1.1MB), and the backend test passes. But in the browser, the assistant's rendered <img data-testid=message-image> element ends up with NO src attribute at all (getAttribute('src') === null, and Chromium logs 'An empty string (\"\") was passed to the src attribute'). The lightbox never opens because the image never actually loads (broken-image icon shown instead). This reproduced on two separate runs (not flaky). Root cause is almost certainly in the frontend markdown pipeline in src/components/render/MessageRenderer.tsx / the react-markdown img renderer failing to preserve extremely long (~1.1MB) base64 data: URLs embedded via markdown image syntax `![alt](data:...)` — the src prop arrives as undefined/empty by the time the custom `img` renderer runs.",
+      "evidence": "Backend: POST /api/images/generate -> 200, {\"data_url\": \"data:image/jpeg;base64,/9j/4AAQ...\", length 1158403} (see test_tscheck_image_generation.py, passed). Browser: image-generation-slash-command check failed with 'Cannot read properties of null' because image.getAttribute('src') was null; console showed 'An empty string (\"\") was passed to the %s attribute ... src'. Screenshot: broken image icon with alt text 'a red lighthouse at dusk' visible, no image content, confirming a frontend rendering defect (backend already proven healthy)."
+    }
+  ],
+  "action_items": [
+    "Fix MessageRenderer's img handling (or how Chat.tsx embeds `data_url` into markdown) so multi-megabyte base64 data: URLs survive the markdown parse and reach the <img src> without being dropped."
+  ],
+  "checks": [
+    {
+      "criterion": "Guest is limited to the free tier-1 model (config catalog shape)",
+      "name": "test_config_exposes_five_tier_catalog_with_single_free_model / test_guest_stream_accepts_free_model_without_auth",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "GET /api/config -> 200, 5 models, only 'lumen' has requires_auth=false; POST /api/chat/guest/stream -> 200 SSE with start+done events. File: backend/tests/test_tscheck_model_catalog_guest_lock.py"
+    },
+    {
+      "criterion": "Signing in unlocks all five tiers and saves history (signup isolation + locked-model access)",
+      "name": "test_new_account_is_isolated_with_no_conversations / test_signed_in_account_can_create_conversation_and_use_locked_model / test_guest_cannot_use_locked_tier_model",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /api/auth/signup -> 200; GET /api/conversations -> 200 []; POST /api/conversations -> 200; POST /api/chat/{id}/stream model_id=quartz -> 200 SSE done; unauthenticated POST /api/chat/{fake}/stream -> 401. File: backend/tests/test_tscheck_signup_tier_unlock.py"
+    },
+    {
+      "criterion": "Image generation via /image (API layer)",
+      "name": "test_image_generate_returns_base64_data_url",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /api/images/generate {prompt:'tscheck...'} -> 200 {data_url: 'data:image/jpeg;base64,...'} len=1158403. File: backend/tests/test_tscheck_image_generation.py"
+    },
+    {
+      "criterion": "Guest can use the app with no login",
+      "name": "guest-chat-streams-reply",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Landed on /, guest-banner visible, sent message, assistant-message appeared with non-empty text."
+    },
+    {
+      "criterion": "Guest is limited to the free tier-1 model (UI)",
+      "name": "guest-model-picker-locked-tier",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "model-picker-trigger shows 'Lumen', menu lists 5 model-option-* entries, clicking model-option-aether keeps trigger label as 'Lumen'."
+    },
+    {
+      "criterion": "Signing in unlocks all five tiers and saves history (UI)",
+      "name": "signin-unlocks-tiers-and-persists",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Signed in as operator@vexion.app, sidebar/conversation-list appeared, selected Orion, sent message, waited for stream completion, reloaded page, conversation still listed and re-opens with assistant-message visible."
+    },
+    {
+      "criterion": "Guest chat is NOT persisted",
+      "name": "guest-chat-not-persisted",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Guest sent a uniquely-tagged message and got a reply; after page reload the guest empty state returned and the unique text had 0 matches on the page."
+    },
+    {
+      "criterion": "Rich rendering pipeline",
+      "name": "rich-rendering-pipeline",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Single reply produced visible message-table, code-block with code-copy-button, .katex element, and mermaid-diagram containing exactly 1 <svg>."
+    },
+    {
+      "criterion": "Image generation via /image (UI)",
+      "name": "image-generation-slash-command",
+      "lane": "browser",
+      "status": "failed",
+      "evidence": "message-image element became visible but its src attribute was null/empty (see bugs[0]); lightbox never opened. Reproduced on rerun."
+    },
+    {
+      "criterion": "Composer behaviour is reliable",
+      "name": "composer-behaviour-reliable",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Shift+Enter inserted a newline without sending (0 assistant messages); Enter sent and stop-button appeared while streaming; stopping showed 'Stopped by you' note with partial content kept; regenerate-button produced a fresh completed reply."
+    },
+    {
+      "criterion": "Command palette and export",
+      "name": "command-palette-and-export",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Ctrl+K opened command-palette listing New chat / Export chat as Markdown / Generate an image / Start voice input / Switch to <model> entries; after signing in, 'Switch to Quartz' changed model-picker-trigger label to 'Quartz'."
+    }
+  ]
+}

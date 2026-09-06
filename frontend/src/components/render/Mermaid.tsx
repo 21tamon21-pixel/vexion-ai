@@ -16,14 +16,14 @@ export default function Mermaid({ chart }: { chart: string }) {
         if (!initialized) {
           mermaid.initialize({
             startOnLoad: false,
-            theme: "dark",
+            theme: "neutral",
             securityLevel: "strict",
             themeVariables: {
-              background: "#0d1420",
-              primaryColor: "#16243a",
-              primaryTextColor: "#dfe9f5",
-              primaryBorderColor: "#3ec6ff",
-              lineColor: "#3ec6ff",
+              background: "#ffffff",
+              primaryColor: "#f3f1ed",
+              primaryTextColor: "#1f1e1c",
+              primaryBorderColor: "#d5cfc4",
+              lineColor: "#8a847a",
               fontFamily: "Inter Variable, sans-serif",
             },
           });
@@ -45,7 +45,7 @@ export default function Mermaid({ chart }: { chart: string }) {
     return (
       <pre
         data-testid="mermaid-error"
-        className="overflow-x-auto rounded-md border border-[#ff5a6a55] bg-[#0a0e17] p-3 font-mono text-xs text-[#ff9aa5]"
+        className="vx-scroll overflow-x-auto rounded-xl border border-border bg-muted/60 p-3 font-mono text-xs text-muted-foreground"
       >
         {chart}
       </pre>
@@ -56,7 +56,7 @@ export default function Mermaid({ chart }: { chart: string }) {
     <div
       ref={ref}
       data-testid="mermaid-diagram"
-      className="vx-glass overflow-x-auto rounded-md p-4 [&_svg]:mx-auto [&_svg]:max-w-full"
+      className="vx-scroll overflow-x-auto rounded-xl border border-border bg-card p-4 [&_svg]:mx-auto [&_svg]:max-w-full"
     />
   );
 }

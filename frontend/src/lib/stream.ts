@@ -9,23 +9,32 @@ export interface StreamHandlers {
   onError: (detail: string) => void;
 }
 
+/**
+ * @param path  relative api path, e.g. `/chat/{id}/stream` or `/chat/guest/stream`
+ * @param body  request payload (authed lane vs guest lane differ)
+ */
 export async function streamChat(
-  conversationId: string,
-  content: string,
-  fromMessageId: string | null,
+  path: string,
+  body: Record<string, unknown>,
   signal: AbortSignal,
   handlers: StreamHandlers,
 ): Promise<void> {
-  const res = await fetch(`/api/chat/${conversationId}/stream`, {
+  const res = await fetch(`/api${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, from_message_id: fromMessageId }),
+    body: JSON.stringify(body),
     signal,
   });
 
   if (!res.ok || !res.body) {
-    const body = await res.text().catch(() => "");
-    handlers.onError(`stream failed (${res.status}) ${body.slice(0, 200)}`);
+    const text = await res.text().catch(() => "");
+    let detail = text.slice(0, 300);
+    try {
+      detail = (JSON.parse(text) as { detail?: string }).detail ?? detail;
+    } catch {
+      /* plain-text error body */
+    }
+    handlers.onError(detail || `stream failed (${res.status})`);
     return;
   }
 
@@ -41,8 +50,9 @@ export async function streamChat(
     const frames = buffer.split("\n\n");
     buffer = frames.pop() ?? "";
     for (const frame of frames) {
-      const eventLine = frame.split("\n").find((l) => l.startsWith("event: "));
-      const dataLine = frame.split("\n").find((l) => l.startsWith("data: "));
+      const lines = frame.split("\n");
+      const eventLine = lines.find((l) => l.startsWith("event: "));
+      const dataLine = lines.find((l) => l.startsWith("data: "));
       if (!eventLine || !dataLine) continue;
       const event = eventLine.slice(7).trim();
       const data = JSON.parse(dataLine.slice(6)) as Record<string, unknown>;

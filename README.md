@@ -1,8 +1,9 @@
 # VEXION — Personal Intelligence Core
 
-A personal, provider-agnostic AI assistant with a futuristic HUD console.
-Type or speak → the model streams a reply → markdown, code, mathematics and
-diagrams render → VEXION can read the answer aloud.
+A personal, provider-agnostic AI assistant with a calm, paper-toned interface.
+Chat as a guest on the free model, or sign in to save your history and pick from
+five model tiers. Replies stream token-by-token; markdown, code, mathematics,
+diagrams and generated images render inline; VEXION can read answers aloud.
 
 The product name is configurable: set `APP_NAME` in `backend/.env`.
 

@@ -17,7 +17,9 @@ class ChatProvider(ABC):
     name: str = "base"
 
     @abstractmethod
-    async def stream(self, system: str, history: List[Dict[str, str]]) -> AsyncIterator[str]:
+    async def stream(
+        self, system: str, history: List[Dict[str, str]], vendor: str = "", model: str = ""
+    ) -> AsyncIterator[str]:
         """Yield response text deltas. history = [{role, content}, ...]."""
         raise NotImplementedError
         yield ""  # pragma: no cover
@@ -28,7 +30,9 @@ class EchoProvider(ChatProvider):
 
     name = "echo"
 
-    async def stream(self, system: str, history: List[Dict[str, str]]) -> AsyncIterator[str]:
+    async def stream(
+        self, system: str, history: List[Dict[str, str]], vendor: str = "", model: str = ""
+    ) -> AsyncIterator[str]:
         last = history[-1]["content"] if history else ""
         text = (
             "> **MOCK MODE** — no AI provider is connected. This is a local echo responder.\n\n"
@@ -44,7 +48,9 @@ class EmergentProvider(ChatProvider):
 
     name = "emergent"
 
-    async def stream(self, system: str, history: List[Dict[str, str]]) -> AsyncIterator[str]:
+    async def stream(
+        self, system: str, history: List[Dict[str, str]], vendor: str = "", model: str = ""
+    ) -> AsyncIterator[str]:
         from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 
         # History is replayed as a transcript because the library owns its own
@@ -59,7 +65,7 @@ class EmergentProvider(ChatProvider):
             api_key=config.EMERGENT_LLM_KEY,
             session_id=str(uuid.uuid4()),
             system_message=system,
-        ).with_model(config.LLM_VENDOR, config.LLM_MODEL)
+        ).with_model(vendor or config.LLM_VENDOR, model or config.LLM_MODEL)
 
         async for event in chat.stream_message(UserMessage(text=prompt)):
             if isinstance(event, TextDelta):

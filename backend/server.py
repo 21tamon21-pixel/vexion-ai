@@ -64,6 +64,7 @@ from lib.config import public_config
 from routers.auth import router as auth_router
 from routers.chat import router as chat_router
 from routers.conversations import router as conversations_router
+from routers.images import router as images_router
 
 
 @api_router.get("/config")
@@ -75,6 +76,7 @@ async def get_config():
 api_router.include_router(auth_router)
 api_router.include_router(conversations_router)
 api_router.include_router(chat_router)
+api_router.include_router(images_router)
 
 # Include the router in the main app
 app.include_router(api_router)

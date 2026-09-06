@@ -44,6 +44,8 @@ FEATURES: Dict[str, bool] = {
 
 def public_config() -> Dict[str, Any]:
     """Config safe to expose to the browser. Never include secrets."""
+    from lib.models_catalog import FREE_MODEL_ID, public_catalog
+
     provider_ready = LLM_PROVIDER != "echo" and bool(EMERGENT_LLM_KEY)
     return {
         "app_name": APP_NAME,
@@ -53,4 +55,6 @@ def public_config() -> Dict[str, Any]:
         "provider_ready": provider_ready,
         "mocked": not provider_ready,
         "features": FEATURES,
+        "models": public_catalog(),
+        "free_model_id": FREE_MODEL_ID,
     }

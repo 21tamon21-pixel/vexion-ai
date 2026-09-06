@@ -35,7 +35,19 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   status: MessageStatus;
+  model_id?: string | null;
   created_at: string;
+}
+
+/** mirrors one entry of lib/models_catalog.public_catalog() */
+export interface ModelInfo {
+  id: string;
+  name: string;
+  tier: number;
+  tagline: string;
+  requires_auth: boolean;
+  plan_required: string;
+  capabilities: string[];
 }
 
 export interface ConversationDetail {
@@ -65,6 +77,16 @@ export interface AppConfig {
     image_generation: boolean;
     guest_mode: boolean;
   };
+  models: ModelInfo[];
+  free_model_id: string;
+}
+
+/** mirrors routers/images.ImageResponse */
+export interface GeneratedImage {
+  prompt: string;
+  data_url: string;
+  caption: string;
+  message_id: string | null;
 }
 
 /** Authoritative application state machine (see PROJECT_CONTEXT.md §state). */

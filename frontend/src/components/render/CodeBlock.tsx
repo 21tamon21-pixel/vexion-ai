@@ -18,7 +18,7 @@ export default function CodeBlock({ language, raw, children }: Props) {
     try {
       await navigator.clipboard.writeText(raw);
       setCopied(true);
-      toast.success("Code copied to clipboard");
+      toast.success("Code copied");
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       toast.error("Clipboard unavailable in this browser");
@@ -26,29 +26,24 @@ export default function CodeBlock({ language, raw, children }: Props) {
   };
 
   return (
-    <div
-      className="overflow-hidden rounded-md border border-[#1d2c44] bg-[#080c14]"
-      data-testid="code-block"
-    >
-      <div className="flex items-center justify-between border-b border-[#1d2c44] bg-[#0b111c] px-3 py-1.5">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#7f96b3]">
-          {language || "text"}
-        </span>
+    <div className="overflow-hidden rounded-xl border border-border bg-muted/60" data-testid="code-block">
+      <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+        <span className="font-mono text-[11px] text-muted-foreground">{language || "text"}</span>
         <button
           onClick={copy}
           data-testid="code-copy-button"
           aria-label="Copy code"
-          className="flex items-center gap-1.5 rounded px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-[#7f96b3] transition-colors duration-200 hover:bg-[#16243a] hover:text-[#3ec6ff]"
+          className="flex items-center gap-1.5 rounded px-2 py-1 text-[11px] text-muted-foreground transition-colors duration-200 hover:bg-secondary hover:text-foreground"
         >
           {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-          {copied ? "copied" : "copy"}
+          {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <div className="flex overflow-x-auto">
+      <div className="vx-scroll flex overflow-x-auto bg-card">
         {numbered && (
           <div
             aria-hidden="true"
-            className="select-none border-r border-[#1d2c44] px-3 py-3 text-right font-mono text-xs leading-6 text-[#33465e]"
+            className="select-none border-r border-border px-3 py-3 text-right font-mono text-xs leading-6 text-muted-foreground/70"
           >
             {lines.map((_, i) => (
               <div key={i}>{i + 1}</div>

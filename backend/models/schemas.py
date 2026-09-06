@@ -43,7 +43,7 @@ class LoginRequest(BaseModel):
 class Conversation(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
-    title: str = "New session"
+    title: str = "New chat"
     pinned: bool = False
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
@@ -60,6 +60,7 @@ class Message(BaseModel):
     role: Literal["user", "assistant"]
     content: str
     status: Literal["complete", "streaming", "stopped", "error"] = "complete"
+    model_id: Optional[str] = None
     created_at: datetime = Field(default_factory=_now)
 
 
@@ -68,6 +69,8 @@ class SendMessageRequest(BaseModel):
     # When set, the conversation is truncated at this message before resending
     # (edit-and-resend / regenerate).
     from_message_id: Optional[str] = None
+    # Which catalog model answers this turn (see lib/models_catalog.py).
+    model_id: Optional[str] = None
 
 
 class ConversationDetail(BaseModel):

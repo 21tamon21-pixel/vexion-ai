@@ -13,7 +13,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
-      <Toaster position="top-right" richColors theme="dark" />
+      <Toaster position="top-right" richColors theme="light" />
     </>
   );
 }

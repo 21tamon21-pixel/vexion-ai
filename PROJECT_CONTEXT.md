@@ -4,9 +4,11 @@
 
 ## 1. What VEXION is
 
-A personal, provider-agnostic AI assistant with a futuristic HUD console UI.
-The core loop is: **user types or speaks → VEXION reasons → the response streams
-token-by-token → markdown / code / maths / diagrams render → VEXION can speak it.**
+A personal, provider-agnostic AI assistant with a calm, paper-toned interface
+(neutral warm-white surfaces, one clay accent, no animated background or motion
+decoration). The core loop is: **user types or speaks → the selected model
+reasons → the response streams token-by-token → markdown / code / maths /
+diagrams / generated images render → VEXION can speak it.**
 
 The application name is configurable (`APP_NAME` in `backend/.env`, surfaced via
 `GET /api/config` and used everywhere in the UI). Renaming the product requires
@@ -42,16 +44,40 @@ real state from `GET /api/config` (`provider`, `model`, `provider_ready`,
 | `frontend/src/components/render/` | `MessageRenderer`, `CodeBlock`, `Mermaid` — the rendering pipeline |
 | `frontend/src/pages/` | `Chat`, `Login`, `Settings` |
 
-## 3. Swapping an AI provider
+## 3. Swapping or adding an AI model
 
-1. Add a class in `backend/lib/providers.py` implementing
-   `async def stream(self, system, history) -> AsyncIterator[str]`.
-2. Register it in `_REGISTRY`.
-3. Set `LLM_PROVIDER=<key>` (plus any keys) in `backend/.env` and restart.
+Two layers:
 
-Nothing in the frontend, database, rendering, voice or auth layers changes.
-Multiple providers can coexist in the registry; routing between them is a future
-extension inside `get_provider()`.
+1. **Provider** (`backend/lib/providers.py`) — *how* we talk to an API. Implement
+   `async def stream(self, system, history, vendor, model)` and register it in
+   `_REGISTRY`; select with `LLM_PROVIDER` in `.env`.
+2. **Catalog** (`backend/lib/models_catalog.py`) — *what the user picks*. Five
+   tiers, each mapping a friendly name (Lumen → Aether) to a vendor + model id,
+   plus `requires_auth` and `plan_required` for future subscriptions. Adding,
+   removing or repricing a model is an edit to this list only: the picker, the
+   command palette, the settings page and the server-side tier check all read it.
+
+Tier 1 (`FREE_MODEL_ID`) is the guest model. The frontend never sees a vendor or
+a model id — only the catalog's public fields.
+
+## 3b. Access tiers and guest mode
+
+- No account: `POST /api/chat/guest/stream`. The **client** owns the history and
+  sends it in the body; the server writes nothing. Only tier 1 is permitted.
+- Signed in: `POST /api/chat/{conversation_id}/stream` with `model_id`. The
+  server re-validates the tier and returns 403 for a locked model, so hiding a
+  model in the UI is a convenience, not the security boundary.
+- Billing is **not** implemented. `plan_required` is metadata only; every tier
+  unlocks with any account today. That is the documented seam for subscriptions.
+
+## 3c. Image generation
+
+`POST /api/images/generate` calls the Gemini image model through the universal
+key and returns a **data URL**, which flows into the same `MessageRenderer`
+image path as any other picture (click to zoom). Triggered by `/image <prompt>`,
+the command palette or a suggestion chip. Object storage is not configured, so
+images are stored inline in the message document — fine for personal use, and
+the place to swap in S3/Supabase later (`FEATURE_IMAGE_GENERATION` gates it).
 
 ## 4. Streaming
 
@@ -97,8 +123,8 @@ side means replacing the implementation inside that hook.
 
 `AppState` in `frontend/src/types.ts` is the authoritative machine:
 `idle | composing | sending | streaming | stopped | complete | listening |
-transcribing | speaking | interrupted | error`. The HUD status indicator derives
-its label and colour from this value — the states are real, never decorative.
+transcribing | speaking | interrupted | error`. The header status text derives
+from this value — the states are real, never decorative.
 
 ## 8. Authentication
 
@@ -118,21 +144,24 @@ See `.env.example`. Every variable is documented there.
 
 ## 10. What is real, mocked, or not built
 
-**Real:** auth + sessions, per-user data isolation, conversations CRUD/pin/
-rename/search, SSE streaming from Claude via the Emergent key, stop/regenerate/
-edit-and-resend, persona configuration, the full rendering pipeline, browser
-voice input and output, boot sequence, HUD visuals, toasts.
+**Real:** guest chat (tier 1, nothing persisted), auth + sessions, per-user data
+isolation, conversations CRUD/pin/rename/search, the five-tier model catalog with
+a picker in the composer, SSE streaming on every tier, stop/regenerate/
+edit-and-resend, image generation, persona configuration, the full rendering
+pipeline, browser voice input and output, command palette (Cmd/Ctrl+K), Markdown
+export, toasts.
 
 **Mocked (labelled in the UI):** when `EMERGENT_LLM_KEY` is unset or
-`LLM_PROVIDER=echo`, the brain is `EchoProvider` and the header reads
-`MOCK BRAIN`.
+`LLM_PROVIDER=echo`, the brain is `EchoProvider` and the header shows a
+`mock brain` badge.
 
 **Not built (extension points documented, no fake UI):**
-file/image attachments and multimodal input, server-side PDF/URL extraction,
-OpenGraph link-preview cards, OAuth (Google/GitHub), email verification and
-password reset, cloud object storage, conversation export/share links, usage
-dashboard, command palette, vector/long-term memory, web search, image
-generation, tool execution.
+subscriptions/billing (`plan_required` is metadata; every tier unlocks with any
+account), file/image *input* attachments and multimodal understanding,
+server-side PDF/URL extraction, OpenGraph link-preview cards, OAuth
+(Google/GitHub), email verification and password reset, cloud object storage
+(generated images are inlined as data URLs), share links, usage dashboard,
+vector/long-term memory, web search, tool execution.
 
 Feature flags for the unfinished capabilities exist in `lib/config.py` and are
 shipped **disabled**; the UI hides them rather than faking them.
