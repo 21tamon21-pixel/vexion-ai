@@ -1,0 +1,147 @@
+{
+  "iteration": 3,
+  "mode": "retest",
+  "summary": "Verified the session-cookie Secure-flag bug fix and covered the 7 new criteria from the briefing (new-chat reset, projects, attachments, billing/PayPal honesty + Aether 402 gate, usage dashboard, Code Bridge plugin connect + backend API). Backend suite: 15/15 passed (6 pre-existing + 9 new). Browser checks: 12/12 passed (4 re-run regressions + 8 new). No bugs found.",
+  "passed": 20,
+  "failed": 0,
+  "flaky": 0,
+  "blocked": 0,
+  "test_error": 0,
+  "retest_needed": false,
+  "bugs": [],
+  "action_items": [],
+  "checks": [
+    {
+      "criterion": "FIXED BUG: signing in then sending a message never shows 'Could not start a chat' (plain http cookie)",
+      "name": "http-signin-then-chat-no-401",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "New account signed up over http://localhost:3000, clicked new-chat-button, sent a message. POST /api/conversations returned <300 (not 401), no 'Could not start' toast appeared, assistant replied, and after page.reload() the chat was still present in conversation-list."
+    },
+    {
+      "criterion": "FIXED BUG: cookie Secure flag follows request scheme (backend)",
+      "name": "test_tscheck_session_cookie_secure_flag.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /auth/signup over plain http: Set-Cookie for vexion_session has HttpOnly but NOT Secure. Same call with header X-Forwarded-Proto: https: Set-Cookie includes Secure. 2/2 passed."
+    },
+    {
+      "criterion": "New chat resets the view",
+      "name": "new-chat-resets-view",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Sent a message creating a real chat, clicked new-chat-button -> empty-state shown, user-message count 0, previous chat still in conversation-list and reopened showing the original 'BANANA' message. sidebar-new-chat-button verified too."
+    },
+    {
+      "criterion": "Projects work like ChatGPT projects",
+      "name": "projects-configure-and-chat-in-project",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Created tscheck-project-<ts>, saved instructions via save-project-instructions-button (toast 'Project instructions saved'), opened /?project=<id> showing active-project-badge with the project name, sent a message, then reopened Configure and project-chat-list no longer showed 'No chats yet'."
+    },
+    {
+      "criterion": "Projects: chat association (backend)",
+      "name": "test_tscheck_projects_chat_association.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /projects -> 200; PATCH /projects/{id} instructions saved and echoed; POST /conversations?project_id=<id> -> 200 with project_id set; GET /projects/{id}/conversations includes the new conversation id."
+    },
+    {
+      "criterion": "Attachments: image and document",
+      "name": "attachments-text-and-image",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Uploaded a .txt containing a unique TSCHECKTOKEN via attachment-file-input -> attachment-chip appeared; asked the assistant to quote the token -> assistant-message contained the exact token. New chat, uploaded a 1x1 .png -> chip appeared and sent without error; attachment-remove-button removed the chip (count 0)."
+    },
+    {
+      "criterion": "Attachments: upload extraction + type rejection (backend)",
+      "name": "test_tscheck_attachment_upload_and_rejection.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /attachments with a .txt (unique TSCHECK-TOKEN) -> 200, kind=document, extracted_text contains the token. POST /attachments with a .exe/application-octet-stream -> 415."
+    },
+    {
+      "criterion": "Plan gating and PayPal honesty",
+      "name": "billing-plan-gating-and-paypal-honesty",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "/billing showed plan-free/plan-core/plan-pro, plan-free-current, and paypal-not-configured. subscribe-pro-button produced a toast containing 'PayPal is not configured' (503, no fake success). In chat, selecting Aether and sending returned stream status 402 and state-label switched to an error state (no silent downgrade)."
+    },
+    {
+      "criterion": "Plan gating and PayPal honesty (backend)",
+      "name": "test_tscheck_paypal_not_configured.py + test_tscheck_aether_tier_gate_free_plan.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "/billing/state: 3 plans, paypal_configured=false. POST /billing/paypal/order plan_id=pro -> 503 'not configured'. POST /chat/{id}/stream model_id=aether on a fresh free-plan account -> 402 mentioning tier/plan. 4/4 passed."
+    },
+    {
+      "criterion": "Usage dashboard shows real counts",
+      "name": "usage-dashboard-shows-real-counts",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Sent a message, then /usage: waited for usage-messages to move off the '0' loading placeholder, then confirmed usage-messages>0, usage-chats>=1, usage-projects>=0, usage-images>=0."
+    },
+    {
+      "criterion": "Plugins: connect flow and Code Bridge API",
+      "name": "plugins-connect-flow",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "/plugins listed Code Bridge as connectable and exactly 3 plugins tagged 'not available yet'. connect-code_bridge-button -> connect-form -> create-connection-button produced connection-token starting with 'vxb_' and handshake-prompt containing '/api/bridge'. finish-connect-link -> connection-item shown; revoke-connection-button marked it 'revoked'."
+    },
+    {
+      "criterion": "Plugins: Code Bridge outward API (backend)",
+      "name": "test_tscheck_plugins_bridge_flow.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /plugins/connections -> token vxb_..., handshake_prompt contains /api/bridge. With Bearer token: GET /bridge/handshake -> 200 matching connection id; POST /bridge/observe -> 200 ok=true; POST /bridge/ask -> 200 with an 'answer' field. Bearer vxb_invalidtoken -> 401. After POST /plugins/connections/{id}/revoke, the same token on /bridge/handshake -> 401."
+    },
+    {
+      "criterion": "No regression: guest chat streaming",
+      "name": "guest-chat-streams-reply",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check by name: guest-banner visible, message sent, assistant-message with non-empty text streamed back."
+    },
+    {
+      "criterion": "No regression: rich rendering pipeline",
+      "name": "rich-rendering-pipeline",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check by name: message-table, code-block+code-copy-button, .katex, mermaid-diagram>svg (exactly 1) all rendered."
+    },
+    {
+      "criterion": "No regression: image generation slash command",
+      "name": "image-generation-slash-command",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check by name: '/image ...' produced a message-image with a valid data: URL, image loaded, lightbox opened."
+    },
+    {
+      "criterion": "No regression: composer behaviour",
+      "name": "composer-behaviour-reliable",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check by name: Shift+Enter newline, Enter sends + stop button, stop preserves partial with 'Stopped by you' note, regenerate produces a fresh reply."
+    }
+  ],
+  "backend_suite": {
+    "command": "cd /app/backend && python -m pytest -q -p no:cacheprovider",
+    "result": "15 passed in ~14s",
+    "files": [
+      "test_tscheck_model_catalog_guest_lock.py",
+      "test_tscheck_signup_tier_unlock.py",
+      "test_tscheck_image_generation.py",
+      "test_tscheck_session_cookie_secure_flag.py (new)",
+      "test_tscheck_aether_tier_gate_free_plan.py (new)",
+      "test_tscheck_paypal_not_configured.py (new)",
+      "test_tscheck_plugins_bridge_flow.py (new)",
+      "test_tscheck_attachment_upload_and_rejection.py (new)",
+      "test_tscheck_projects_chat_association.py (new)"
+    ]
+  },
+  "notes": [
+    "Matrix had 8 criteria; the regression item bundles the 4 pre-existing persisted checks re-run by name (not re-authored), so checks[] lists them individually alongside the 7 new criteria (each new API-backed UI criterion got both a browser check and a backend test) = 16 artifacts total.",
+    "Console errors observed during billing-plan-gating-and-paypal-honesty (503 and 402 responses logged to console) are expected — they are the very failures the criterion checks for, not bugs.",
+    "All new browser/backend fixtures use tscheck-<slug>-<timestamp> emails/labels; no seeded data (operator@vexion.app, 'Smoke Project') was touched."
+  ]
+}

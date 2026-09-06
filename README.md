@@ -1,9 +1,25 @@
 # VEXION — Personal Intelligence Core
 
 A personal, provider-agnostic AI assistant with a calm, paper-toned interface.
-Chat as a guest on the free model, or sign in to save your history and pick from
-five model tiers. Replies stream token-by-token; markdown, code, mathematics,
-diagrams and generated images render inline; VEXION can read answers aloud.
+Chat as a guest on the free model, or sign in for saved history, projects, five
+model tiers, attachments, image generation, a usage dashboard and plugin
+connections. Replies stream token-by-token; markdown, code, mathematics,
+chemistry, diagrams and images render inline; VEXION can read answers aloud.
+
+## Feature map
+
+| Area | Where |
+|---|---|
+| Chat + streaming (guest and signed-in lanes) | `backend/routers/chat.py`, `frontend/src/lib/stream.ts` |
+| Five model tiers (Lumen → Aether) | `backend/lib/models_catalog.py` |
+| Plans + PayPal checkout | `backend/lib/plans.py`, `backend/routers/billing.py` |
+| Projects (shared instructions) | `backend/routers/projects.py`, `frontend/src/pages/Projects.tsx` |
+| Attachments (image / PDF / text) | `backend/routers/attachments.py` |
+| Image generation | `backend/routers/images.py` |
+| Usage dashboard | `backend/routers/usage.py` |
+| Plugins + Code Bridge for external apps | `backend/routers/plugins.py`, `backend/routers/bridge.py` |
+| Rendering pipeline | `frontend/src/components/render/` |
+| Voice (browser STT/TTS, streaming speech) | `frontend/src/hooks/useVoice.ts` |
 
 The product name is configurable: set `APP_NAME` in `backend/.env`.
 

@@ -38,8 +38,14 @@ async def list_conversations(user: Dict[str, Any] = Depends(current_user)):
 
 
 @router.post("", response_model=Conversation)
-async def create_conversation(user: Dict[str, Any] = Depends(current_user)):
-    convo = Conversation(user_id=user["id"])
+async def create_conversation(
+    project_id: str | None = None, user: Dict[str, Any] = Depends(current_user)
+):
+    if project_id:
+        owned_project = await db.projects.find_one({"id": project_id, "user_id": user["id"]})
+        if not owned_project:
+            raise HTTPException(status_code=404, detail="Project not found")
+    convo = Conversation(user_id=user["id"], project_id=project_id)
     await db.conversations.insert_one(convo.model_dump())
     return convo
 

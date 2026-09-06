@@ -1,14 +1,14 @@
 """Provider abstraction layer — UI -> app logic -> brain -> provider.
 
-A provider implements `stream(system, history)` and yields text deltas.
-Register new providers in `get_provider()`; nothing else in the app knows a
-provider's name.
+A provider implements `stream(system, history, vendor, model, images)` and yields
+text deltas. Register new providers in `_REGISTRY`; nothing else in the app knows
+a provider's name.
 """
 from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Dict, List
+from typing import AsyncIterator, Dict, List, Optional
 
 from lib import config
 
@@ -18,9 +18,14 @@ class ChatProvider(ABC):
 
     @abstractmethod
     async def stream(
-        self, system: str, history: List[Dict[str, str]], vendor: str = "", model: str = ""
+        self,
+        system: str,
+        history: List[Dict[str, str]],
+        vendor: str = "",
+        model: str = "",
+        images: Optional[List[str]] = None,
     ) -> AsyncIterator[str]:
-        """Yield response text deltas. history = [{role, content}, ...]."""
+        """Yield response text deltas. `images` are bare base64 strings."""
         raise NotImplementedError
         yield ""  # pragma: no cover
 
@@ -31,13 +36,19 @@ class EchoProvider(ChatProvider):
     name = "echo"
 
     async def stream(
-        self, system: str, history: List[Dict[str, str]], vendor: str = "", model: str = ""
+        self,
+        system: str,
+        history: List[Dict[str, str]],
+        vendor: str = "",
+        model: str = "",
+        images: Optional[List[str]] = None,
     ) -> AsyncIterator[str]:
         last = history[-1]["content"] if history else ""
         text = (
             "> **MOCK MODE** — no AI provider is connected. This is a local echo responder.\n\n"
             f"You said: {last}\n\n"
-            "Configure `LLM_PROVIDER` and `EMERGENT_LLM_KEY` in `backend/.env` to enable the real brain."
+            + (f"Received {len(images)} image(s).\n\n" if images else "")
+            + "Configure `LLM_PROVIDER` and `EMERGENT_LLM_KEY` in `backend/.env` to enable the real brain."
         )
         for token in text.split(" "):
             yield token + " "
@@ -49,9 +60,20 @@ class EmergentProvider(ChatProvider):
     name = "emergent"
 
     async def stream(
-        self, system: str, history: List[Dict[str, str]], vendor: str = "", model: str = ""
+        self,
+        system: str,
+        history: List[Dict[str, str]],
+        vendor: str = "",
+        model: str = "",
+        images: Optional[List[str]] = None,
     ) -> AsyncIterator[str]:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+        from emergentintegrations.llm.chat import (
+            ImageContent,
+            LlmChat,
+            StreamDone,
+            TextDelta,
+            UserMessage,
+        )
 
         # History is replayed as a transcript because the library owns its own
         # per-session buffer; this keeps memory authoritative in our database.
@@ -67,7 +89,13 @@ class EmergentProvider(ChatProvider):
             system_message=system,
         ).with_model(vendor or config.LLM_VENDOR, model or config.LLM_MODEL)
 
-        async for event in chat.stream_message(UserMessage(text=prompt)):
+        message = (
+            UserMessage(text=prompt, file_contents=[ImageContent(b64) for b64 in images])
+            if images
+            else UserMessage(text=prompt)
+        )
+
+        async for event in chat.stream_message(message):
             if isinstance(event, TextDelta):
                 yield event.content
             elif isinstance(event, StreamDone):

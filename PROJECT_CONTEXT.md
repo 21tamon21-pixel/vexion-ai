@@ -155,13 +155,27 @@ export, toasts.
 `LLM_PROVIDER=echo`, the brain is `EchoProvider` and the header shows a
 `mock brain` badge.
 
+Also real: projects (shared instructions per chat group), image + PDF + text
+attachments with server-side extraction and multimodal image input, the usage
+dashboard, plan-based tier gating (402 above your plan), and the Code Bridge
+plugin (token-authenticated `/api/bridge/*` for an external coding site, with
+observe/connect/edit/run scopes and revocation).
+
+**Configured by the operator, honest until then:** PayPal. `PAYPAL_CLIENT_ID`
+and `PAYPAL_SECRET` are empty, so `/api/billing/paypal/*` returns 503 and the
+Plans page states PayPal is not configured. No charge is ever simulated.
+
 **Not built (extension points documented, no fake UI):**
-subscriptions/billing (`plan_required` is metadata; every tier unlocks with any
-account), file/image *input* attachments and multimodal understanding,
-server-side PDF/URL extraction, OpenGraph link-preview cards, OAuth
-(Google/GitHub), email verification and password reset, cloud object storage
-(generated images are inlined as data URLs), share links, usage dashboard,
-vector/long-term memory, web search, tool execution.
+recurring PayPal subscriptions (one-off orders only), URL/page extraction,
+OpenGraph link-preview cards, OAuth (Google/GitHub), email verification and
+password reset, cloud object storage (images and attachments are inlined),
+share links, vector/long-term memory, web search, autonomous tool execution.
+
+**Fixed bug worth knowing:** the session cookie was always `Secure`, so over
+plain http the browser dropped it while the SPA still believed it was signed in
+— every write then 401'd as "Could not start a chat". `create_session` now sets
+`secure` from `X-Forwarded-Proto`/the request scheme, and login re-reads
+`/auth/me` before navigating.
 
 Feature flags for the unfinished capabilities exist in `lib/config.py` and are
 shipped **disabled**; the UI hides them rather than faking them.

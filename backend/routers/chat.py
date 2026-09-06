@@ -20,9 +20,10 @@ from pydantic import BaseModel, Field
 from lib import config
 from lib.db import db
 from lib.models_catalog import FREE_MODEL_ID, get_model
+from lib.plans import max_tier_for
 from lib.providers import get_provider
 from lib.security import current_user
-from models.schemas import Message, Persona, SendMessageRequest
+from models.schemas import AttachmentRef, Message, Persona, SendMessageRequest
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -50,14 +51,41 @@ def _build_system(persona: Persona) -> str:
     return "\n\n".join(parts)
 
 
-def _resolve_model(model_id: Optional[str], authenticated: bool) -> Dict[str, Any]:
+def _resolve_model(model_id: Optional[str], authenticated: bool, plan_id: str = "free") -> Dict[str, Any]:
     spec = get_model(model_id)
     if spec["requires_auth"] and not authenticated:
         raise HTTPException(
             status_code=403,
             detail=f"{spec['name']} requires an account. Sign in to unlock tier {spec['tier']}.",
         )
+    if authenticated and spec["tier"] > max_tier_for(plan_id):
+        raise HTTPException(
+            status_code=402,
+            detail=f"{spec['name']} (tier {spec['tier']}) needs a higher plan. Upgrade to use it.",
+        )
     return spec
+
+
+async def _load_attachments(ids: List[str], user_id: str) -> tuple[List[str], str, List[Dict[str, str]]]:
+    """Returns (base64 images, extracted document text, refs for the message)."""
+    images: List[str] = []
+    doc_text: List[str] = []
+    refs: List[Dict[str, str]] = []
+    for aid in ids[:6]:
+        doc = await db.attachments.find_one({"id": aid})
+        if not doc:
+            continue
+        owner = doc.get("user_id")
+        if owner and owner != user_id:
+            raise HTTPException(status_code=403, detail="Not your attachment")
+        refs.append({"id": doc["id"], "kind": doc["kind"], "filename": doc["filename"]})
+        if doc["kind"] == "image" and doc.get("data_url"):
+            images.append(doc["data_url"].split(",", 1)[-1])
+        elif doc.get("extracted_text"):
+            doc_text.append(
+                f"### ATTACHED DOCUMENT: {doc['filename']}\n{doc['extracted_text'][:60000]}"
+            )
+    return images, "\n\n".join(doc_text), refs
 
 
 @router.post("/guest/stream")
@@ -117,7 +145,13 @@ async def stream_chat(
     if not convo:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    spec = _resolve_model(payload.model_id, authenticated=True)
+    spec = _resolve_model(
+        payload.model_id,
+        authenticated=True,
+        plan_id=(user.get("subscription") or {}).get("plan_id", "free"),
+    )
+
+    images, doc_text, refs = await _load_attachments(payload.attachment_ids, user["id"])
 
     # Edit-and-resend / regenerate: drop everything from the anchor onwards.
     if payload.from_message_id:
@@ -130,7 +164,12 @@ async def stream_chat(
             {"conversation_id": conversation_id, "created_at": {"$gte": anchor["created_at"]}}
         )
 
-    user_msg = Message(conversation_id=conversation_id, role="user", content=payload.content)
+    user_msg = Message(
+        conversation_id=conversation_id,
+        role="user",
+        content=payload.content,
+        attachments=[AttachmentRef(**r) for r in refs],
+    )
     await db.messages.insert_one(user_msg.model_dump())
 
     updates: Dict[str, Any] = {"updated_at": datetime.now(timezone.utc)}
@@ -146,9 +185,24 @@ async def stream_chat(
     history: List[Dict[str, str]] = [
         {"role": d["role"], "content": d["content"]} for d in docs[-MAX_HISTORY:]
     ]
+    if doc_text and history:
+        history[-1] = {
+            "role": "user",
+            "content": f"{doc_text}\n\n---\n\n{history[-1]['content']}",
+        }
 
     persona = Persona(**user.get("persona", {}))
     system = _build_system(persona)
+
+    # Project instructions apply to every chat inside that project.
+    if convo.get("project_id"):
+        project = await db.projects.find_one(
+            {"id": convo["project_id"], "user_id": user["id"]}
+        )
+        if project and project.get("instructions"):
+            system += (
+                f"\n\nProject '{project['name']}' instructions: {project['instructions'].strip()}"
+            )
     assistant = Message(
         conversation_id=conversation_id,
         role="assistant",
@@ -171,7 +225,9 @@ async def stream_chat(
             },
         )
         try:
-            async for delta in provider.stream(system, history, spec["vendor"], spec["model"]):
+            async for delta in provider.stream(
+                system, history, spec["vendor"], spec["model"], images
+            ):
                 buffer += delta
                 yield _sse("delta", {"message_id": assistant.id, "text": delta})
         except asyncio.CancelledError:

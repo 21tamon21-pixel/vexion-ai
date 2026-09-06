@@ -61,10 +61,16 @@ async def get_status_checks():
     return [StatusCheck(**status_check) for status_check in status_checks]
 
 from lib.config import public_config
+from routers.attachments import router as attachments_router
 from routers.auth import router as auth_router
+from routers.billing import router as billing_router
+from routers.bridge import router as bridge_router
 from routers.chat import router as chat_router
 from routers.conversations import router as conversations_router
 from routers.images import router as images_router
+from routers.plugins import router as plugins_router
+from routers.projects import router as projects_router
+from routers.usage import router as usage_router
 
 
 @api_router.get("/config")
@@ -75,8 +81,14 @@ async def get_config():
 
 api_router.include_router(auth_router)
 api_router.include_router(conversations_router)
+api_router.include_router(projects_router)
 api_router.include_router(chat_router)
 api_router.include_router(images_router)
+api_router.include_router(attachments_router)
+api_router.include_router(usage_router)
+api_router.include_router(billing_router)
+api_router.include_router(plugins_router)
+api_router.include_router(bridge_router)
 
 # Include the router in the main app
 app.include_router(api_router)

@@ -45,8 +45,14 @@ FEATURES: Dict[str, bool] = {
 def public_config() -> Dict[str, Any]:
     """Config safe to expose to the browser. Never include secrets."""
     from lib.models_catalog import FREE_MODEL_ID, public_catalog
+    from lib.plans import PLANS
+    from lib.plugins_catalog import CATALOG as PLUGIN_CATALOG
 
     provider_ready = LLM_PROVIDER != "echo" and bool(EMERGENT_LLM_KEY)
+    paypal_ready = bool(
+        os.environ.get("PAYPAL_CLIENT_ID", "").strip()
+        and os.environ.get("PAYPAL_SECRET", "").strip()
+    )
     return {
         "app_name": APP_NAME,
         "app_tagline": APP_TAGLINE,
@@ -57,4 +63,7 @@ def public_config() -> Dict[str, Any]:
         "features": FEATURES,
         "models": public_catalog(),
         "free_model_id": FREE_MODEL_ID,
+        "plans": PLANS,
+        "paypal_configured": paypal_ready,
+        "plugins_available": [p["id"] for p in PLUGIN_CATALOG if p["available"]],
     }

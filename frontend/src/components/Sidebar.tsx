@@ -1,21 +1,48 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { Check, LogOut, Pin, Plus, Search, Settings, Trash2, X } from "lucide-react";
+import {
+  BarChart3,
+  Check,
+  CreditCard,
+  FolderOpen,
+  LogOut,
+  Pin,
+  Plug,
+  Plus,
+  Search,
+  Settings,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
-import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch } from "@/lib/api";
 import { useEndSession } from "@/hooks/useAuth";
-import type { Conversation, SearchHit, User } from "@/types";
+import type { AppConfig, Conversation, Project, SearchHit, User } from "@/types";
 
 interface Props {
   conversations: Conversation[];
+  projects: Project[];
   activeId: string | null;
+  activeProjectId: string | null;
   onSelect: (id: string) => void;
+  onNewChat: () => void;
   user: User;
   appName: string;
+  config?: AppConfig;
 }
 
-export default function Sidebar({ conversations, activeId, onSelect, user, appName }: Props) {
+export default function Sidebar({
+  conversations,
+  projects,
+  activeId,
+  activeProjectId,
+  onSelect,
+  onNewChat,
+  user,
+  appName,
+  config,
+}: Props) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const endSession = useEndSession();
@@ -27,14 +54,6 @@ export default function Sidebar({ conversations, activeId, onSelect, user, appNa
     queryKey: ["search", query],
     queryFn: () => apiGet<SearchHit[]>(`/conversations/search?q=${encodeURIComponent(query)}`),
     enabled: query.trim().length > 1,
-  });
-
-  const createConvo = useMutation({
-    mutationFn: () => apiPost<Conversation>("/conversations"),
-    onSuccess: (c) => {
-      qc.invalidateQueries({ queryKey: ["conversations"] });
-      onSelect(c.id);
-    },
   });
 
   const patchConvo = useMutation({
@@ -52,6 +71,15 @@ export default function Sidebar({ conversations, activeId, onSelect, user, appNa
   });
 
   const results = query.trim().length > 1 ? (search.data ?? []) : null;
+  const visible = activeProjectId
+    ? conversations.filter((c) => c.project_id === activeProjectId)
+    : conversations;
+
+  const planName =
+    config?.plans.find((p) => p.id === (user.subscription?.plan_id ?? "free"))?.name ?? "Free";
+
+  const navLink =
+    "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-sidebar-foreground transition-colors duration-200 hover:bg-sidebar-accent";
 
   return (
     <aside
@@ -67,13 +95,30 @@ export default function Sidebar({ conversations, activeId, onSelect, user, appNa
           {appName}
         </Link>
         <button
-          onClick={() => createConvo.mutate()}
-          data-testid="new-conversation-button"
+          onClick={onNewChat}
+          data-testid="sidebar-new-chat-button"
           aria-label="New chat"
           className="rounded-md p-1.5 text-muted-foreground transition-colors duration-200 hover:bg-sidebar-accent hover:text-foreground"
         >
           <Plus className="h-4 w-4" />
         </button>
+      </div>
+
+      <div className="space-y-0.5 px-2 pb-2">
+        <Link to="/projects" className={navLink} data-testid="nav-projects">
+          <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" /> Projects
+          <span className="ml-auto text-[11px] text-muted-foreground">{projects.length}</span>
+        </Link>
+        <Link to="/plugins" className={navLink} data-testid="nav-plugins">
+          <Plug className="h-3.5 w-3.5 text-muted-foreground" /> Plugins
+        </Link>
+        <Link to="/usage" className={navLink} data-testid="nav-usage">
+          <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" /> Usage
+        </Link>
+        <Link to="/billing" className={navLink} data-testid="nav-billing">
+          <CreditCard className="h-3.5 w-3.5 text-muted-foreground" /> Plan
+          <span className="ml-auto text-[11px] text-clay">{planName}</span>
+        </Link>
       </div>
 
       <div className="px-3 pb-3">
@@ -105,7 +150,7 @@ export default function Sidebar({ conversations, activeId, onSelect, user, appNa
                 <div className="truncate text-[11px] text-muted-foreground">{hit.snippet}</div>
               </button>
             ))
-          : conversations.map((c) => (
+          : visible.map((c) => (
               <div
                 key={c.id}
                 data-testid="conversation-item"
@@ -173,7 +218,7 @@ export default function Sidebar({ conversations, activeId, onSelect, user, appNa
                 )}
               </div>
             ))}
-        {!results && conversations.length === 0 && (
+        {!results && visible.length === 0 && (
           <p className="px-3 py-6 text-center text-[12px] text-muted-foreground">No chats yet</p>
         )}
       </nav>

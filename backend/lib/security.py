@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from fastapi import Cookie, HTTPException, Response
+from fastapi import Cookie, Header, HTTPException, Response
 
 from lib.db import db
 
@@ -33,7 +33,7 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
-async def create_session(response: Response, user_id: str) -> str:
+async def create_session(response: Response, user_id: str, secure: bool = True) -> str:
     token = secrets.token_urlsafe(32)
     await db.sessions.insert_one(
         {
@@ -44,12 +44,15 @@ async def create_session(response: Response, user_id: str) -> str:
             "expires_at": datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS),
         }
     )
+    # `secure` must follow the request scheme: a Secure cookie set over plain
+    # http is dropped by the browser, which used to leave the SPA "signed in"
+    # with no session cookie (every write then failed with 401).
     response.set_cookie(
         SESSION_COOKIE,
         token,
         httponly=True,
         samesite="lax",
-        secure=True,
+        secure=secure,
         max_age=SESSION_DAYS * 86400,
         path="/",
     )
@@ -75,6 +78,17 @@ async def _user_from_token(token: Optional[str]) -> Optional[Dict[str, Any]]:
         await db.sessions.delete_many({"token": token})
         return None
     return await db.users.find_one({"id": session["user_id"]})
+
+
+async def bearer_connection(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+    """Auth for external plugin clients (the coding-bridge). Token, not cookie."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+    token = authorization.split(" ", 1)[1].strip()
+    conn = await db.plugin_connections.find_one({"token": token, "revoked": False})
+    if not conn:
+        raise HTTPException(status_code=401, detail="Invalid or revoked connection token")
+    return conn
 
 
 async def current_user(vexion_session: Optional[str] = Cookie(default=None)) -> Dict[str, Any]:

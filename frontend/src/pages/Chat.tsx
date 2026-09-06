@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { ArrowDown, Download, Image as ImageIcon, Pencil, RefreshCw, Volume2, VolumeX } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  ArrowDown,
+  Download,
+  FileText,
+  FolderOpen,
+  Image as ImageIcon,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { toast } from "sonner";
-import { apiGet, apiPost } from "@/lib/api";
+import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { streamChat } from "@/lib/stream";
 import { useAppConfig, useAuth } from "@/hooks/useAuth";
 import { sttSupported, useVoice } from "@/hooks/useVoice";
@@ -12,12 +23,15 @@ import ChatInput from "@/components/ChatInput";
 import CommandPalette, { type PaletteAction } from "@/components/CommandPalette";
 import MessageRenderer from "@/components/render/MessageRenderer";
 import type {
+  AppConfig,
   AppState,
+  Attachment,
   Conversation,
   ConversationDetail,
   GeneratedImage,
   Message,
   ModelInfo,
+  Project,
 } from "@/types";
 
 const SUGGESTIONS = [
@@ -42,15 +56,26 @@ const STATE_LABEL: Record<AppState, string> = {
 
 const MODEL_KEY = "vexion.model";
 
+function detailOf(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    const body = err.body as { detail?: string } | null;
+    if (body?.detail) return body.detail;
+    return `${fallback} (${err.status})`;
+  }
+  return fallback;
+}
+
 export default function Chat() {
   const qc = useQueryClient();
   const { user, loading } = useAuth();
   const { data: config } = useAppConfig();
+  const [params, setParams] = useSearchParams();
   const appName = config?.app_name ?? "VEXION";
   const authenticated = Boolean(user);
 
   const models: ModelInfo[] = useMemo(() => config?.models ?? [], [config]);
   const freeModel = config?.free_model_id ?? "lumen";
+  const projectId = params.get("project");
 
   const [selectedModel, setSelectedModel] = useState<string>(
     () => localStorage.getItem(MODEL_KEY) ?? "lumen",
@@ -58,6 +83,8 @@ export default function Chat() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [state, setState] = useState<AppState>("idle");
   const [pinnedToBottom, setPinnedToBottom] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -79,6 +106,17 @@ export default function Chat() {
     enabled: authenticated,
   });
 
+  const projects = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => apiGet<Project[]>("/projects"),
+    enabled: authenticated,
+  });
+
+  const activeProject = useMemo(
+    () => (projects.data ?? []).find((p) => p.id === projectId) ?? null,
+    [projects.data, projectId],
+  );
+
   const detail = useQuery({
     queryKey: ["conversation", activeId],
     queryFn: () => apiGet<ConversationDetail>(`/conversations/${activeId}`),
@@ -88,10 +126,6 @@ export default function Chat() {
   useEffect(() => {
     if (detail.data && !streamingRef.current) setMessages(detail.data.messages);
   }, [detail.data]);
-
-  const createConvo = useMutation({
-    mutationFn: () => apiPost<Conversation>("/conversations"),
-  });
 
   const voice = useVoice(
     (text) => {
@@ -107,6 +141,15 @@ export default function Chat() {
 
   const persona = user?.persona;
 
+  const newChat = useCallback(() => {
+    abortRef.current?.abort();
+    setActiveId(null);
+    setMessages([]);
+    setAttachments([]);
+    setInput("");
+    setState("idle");
+  }, []);
+
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     const el = scrollRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior });
@@ -116,6 +159,47 @@ export default function Chat() {
     if (pinnedToBottom) scrollToBottom(state === "streaming" ? "auto" : "smooth");
   }, [messages, pinnedToBottom, scrollToBottom, state]);
 
+  const uploadFiles = useCallback(async (files: File[]) => {
+    setUploading(true);
+    for (const file of files.slice(0, 6)) {
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        const res = await fetch("/api/attachments", { method: "POST", body: form });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { detail?: string } | null;
+          toast.error(body?.detail ?? `Could not attach ${file.name}`);
+          continue;
+        }
+        const attachment = (await res.json()) as Attachment;
+        setAttachments((prev) => [...prev, attachment]);
+        toast.success(
+          attachment.kind === "image"
+            ? `${attachment.filename} attached`
+            : `${attachment.filename} read (${attachment.extracted_text.length} chars of text)`,
+        );
+      } catch {
+        toast.error(`Upload of ${file.name} failed`);
+      }
+    }
+    setUploading(false);
+  }, []);
+
+  const ensureConversation = useCallback(async (): Promise<string | null> => {
+    if (activeId) return activeId;
+    try {
+      const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+      const convo = await apiPost<Conversation>(`/conversations${query}`);
+      setActiveId(convo.id);
+      qc.invalidateQueries({ queryKey: ["conversations"] });
+      return convo.id;
+    } catch (err) {
+      setState("error");
+      toast.error(detailOf(err, "Could not start a chat"));
+      return null;
+    }
+  }, [activeId, projectId, qc]);
+
   const generateImage = useCallback(
     async (prompt: string) => {
       if (!prompt.trim()) {
@@ -124,12 +208,15 @@ export default function Chat() {
       }
       setInput("");
       setState("sending");
-      const placeholderId = `img-${Date.now()}`;
+      const cid = authenticated ? await ensureConversation() : null;
+      if (authenticated && !cid) return;
+
+      const stamp = `img-${Date.now()}`;
       setMessages((prev) => [
         ...prev,
         {
-          id: `${placeholderId}-u`,
-          conversation_id: activeId ?? "guest",
+          id: `${stamp}-u`,
+          conversation_id: cid ?? "guest",
           role: "user",
           content: `/image ${prompt}`,
           status: "complete",
@@ -139,13 +226,13 @@ export default function Chat() {
       try {
         const res = await apiPost<GeneratedImage>("/images/generate", {
           prompt,
-          conversation_id: authenticated ? activeId : null,
+          conversation_id: cid,
         });
         setMessages((prev) => [
           ...prev,
           {
-            id: res.message_id ?? placeholderId,
-            conversation_id: activeId ?? "guest",
+            id: res.message_id ?? stamp,
+            conversation_id: cid ?? "guest",
             role: "assistant",
             content: `${res.caption}\n\n![${prompt}](${res.data_url})`.trim(),
             status: "complete",
@@ -155,24 +242,21 @@ export default function Chat() {
         ]);
         setState("complete");
         if (authenticated) qc.invalidateQueries({ queryKey: ["conversations"] });
-      } catch {
+      } catch (err) {
         setState("error");
-        toast.error("Image generation failed");
+        toast.error(detailOf(err, "Image generation failed"));
       }
     },
-    [activeId, authenticated, qc],
+    [authenticated, ensureConversation, qc],
   );
 
   const send = useCallback(
     async (content: string, fromMessageId: string | null = null) => {
       const text = content.trim();
-      if (!text || streamingRef.current) return;
+      if ((!text && attachments.length === 0) || streamingRef.current) return;
 
       if (text === "/clear") {
-        setInput("");
-        setActiveId(null);
-        setMessages([]);
-        setState("idle");
+        newChat();
         return;
       }
 
@@ -186,16 +270,9 @@ export default function Chat() {
       setPinnedToBottom(true);
 
       let cid = activeId;
-      if (authenticated && !cid) {
-        try {
-          const convo = await createConvo.mutateAsync();
-          cid = convo.id;
-          setActiveId(convo.id);
-        } catch {
-          setState("error");
-          toast.error("Could not start a chat");
-          return;
-        }
+      if (authenticated) {
+        cid = await ensureConversation();
+        if (!cid) return;
       }
 
       if (fromMessageId) {
@@ -205,29 +282,44 @@ export default function Chat() {
         });
       }
 
-      const historySnapshot = messages
-        .filter((m) => !fromMessageId || messages.indexOf(m) < messages.findIndex((x) => x.id === fromMessageId))
-        .map((m) => ({ role: m.role, content: m.content }));
+      const anchorIdx = fromMessageId ? messages.findIndex((m) => m.id === fromMessageId) : -1;
+      const historySnapshot = (anchorIdx >= 0 ? messages.slice(0, anchorIdx) : messages).map(
+        (m) => ({ role: m.role, content: m.content }),
+      );
 
+      const sentAttachments = attachments;
       const optimistic: Message = {
         id: `tmp-${Date.now()}`,
         conversation_id: cid ?? "guest",
         role: "user",
-        content: text,
+        content: text || "(attachment)",
         status: "complete",
+        attachments: sentAttachments.map((a) => ({
+          id: a.id,
+          kind: a.kind,
+          filename: a.filename,
+        })),
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, optimistic]);
+      setAttachments([]);
 
       const controller = new AbortController();
       abortRef.current = controller;
       streamingRef.current = true;
+      voice.resetSpeechCursor();
+      const autoSpeak = Boolean(persona?.auto_speak && persona.voice_enabled);
       let assistantId = "";
       let buffer = "";
 
       const path = authenticated ? `/chat/${cid}/stream` : "/chat/guest/stream";
       const body = authenticated
-        ? { content: text, from_message_id: fromMessageId, model_id: selectedModel }
+        ? {
+            content: text || "Please look at the attached file.",
+            from_message_id: fromMessageId,
+            model_id: selectedModel,
+            attachment_ids: sentAttachments.map((a) => a.id),
+          }
         : { content: text, history: historySnapshot };
 
       try {
@@ -253,10 +345,12 @@ export default function Chat() {
             setMessages((prev) =>
               prev.map((m) => (m.id === assistantId ? { ...m, content: buffer } : m)),
             );
+            // Sentence-level streaming speech, so VEXION talks while it thinks.
+            if (autoSpeak) voice.speakStreaming(buffer, persona?.voice_name);
           },
           onError: (detailText) => {
             setState("error");
-            toast.error(detailText.slice(0, 160));
+            toast.error(detailText.slice(0, 200));
           },
           onDone: (status) => {
             setMessages((prev) =>
@@ -267,9 +361,9 @@ export default function Chat() {
               ),
             );
             setState(status === "complete" ? "complete" : "error");
-            if (persona?.auto_speak && persona.voice_enabled && buffer) {
+            if (autoSpeak && buffer) {
+              voice.speakStreaming(`${buffer}\n`, persona?.voice_name);
               setState("speaking");
-              voice.speak(buffer, persona.voice_name);
             }
           },
         });
@@ -279,6 +373,7 @@ export default function Chat() {
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, status: "stopped" } : m)),
           );
+          voice.stopSpeaking();
           toast.warning("Stopped — the partial reply was kept");
         } else {
           setState("error");
@@ -295,10 +390,12 @@ export default function Chat() {
     },
     [
       activeId,
+      attachments,
       authenticated,
-      createConvo,
+      ensureConversation,
       generateImage,
       messages,
+      newChat,
       persona,
       qc,
       selectedModel,
@@ -351,16 +448,7 @@ export default function Chat() {
 
   const paletteActions: PaletteAction[] = useMemo(
     () => [
-      {
-        id: "new-chat",
-        label: "New chat",
-        hint: "/clear",
-        run: () => {
-          setActiveId(null);
-          setMessages([]);
-          setState("idle");
-        },
-      },
+      { id: "new-chat", label: "New chat", hint: "/clear", run: newChat },
       { id: "export", label: "Export chat as Markdown", run: exportMarkdown },
       {
         id: "generate-image",
@@ -382,7 +470,7 @@ export default function Chat() {
         },
       })),
     ],
-    [authenticated, exportMarkdown, models, onMicToggle],
+    [authenticated, exportMarkdown, models, newChat, onMicToggle],
   );
 
   const streaming = state === "sending" || state === "streaming";
@@ -404,9 +492,13 @@ export default function Chat() {
       authenticated={authenticated}
       onLockedPick={(m) =>
         toast.info(`${m.name} is tier ${m.tier} — sign in to unlock it`, {
-          description: "Free accounts keep your chat history too.",
+          description: "A free account also keeps your chat history.",
         })
       }
+      attachments={attachments}
+      onFiles={(files) => void uploadFiles(files)}
+      onRemoveAttachment={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
+      uploading={uploading}
       autoFocus={empty}
     />
   );
@@ -419,14 +511,19 @@ export default function Chat() {
         <div className="hidden md:block">
           <Sidebar
             conversations={conversations.data ?? []}
+            projects={projects.data ?? []}
             activeId={activeId}
+            activeProjectId={projectId}
             onSelect={(id) => {
               setActiveId(id);
               setMessages([]);
+              setAttachments([]);
               setState("idle");
             }}
+            onNewChat={newChat}
             user={user}
             appName={appName}
+            config={config as AppConfig | undefined}
           />
         </div>
       )}
@@ -437,9 +534,31 @@ export default function Chat() {
             {!authenticated && (
               <span className="font-heading text-[16px] font-semibold">{appName}</span>
             )}
-            <span className="text-[12px] text-muted-foreground" data-testid="state-label" aria-live="polite">
+            <span
+              className="text-[12px] text-muted-foreground"
+              data-testid="state-label"
+              aria-live="polite"
+            >
               {STATE_LABEL[state]}
             </span>
+            {activeProject && (
+              <span
+                className="flex items-center gap-1.5 rounded-md bg-secondary px-2 py-0.5 text-[11.5px]"
+                data-testid="active-project-badge"
+              >
+                <FolderOpen className="h-3 w-3 text-clay" /> {activeProject.name}
+                <button
+                  onClick={() => {
+                    setParams({});
+                    newChat();
+                  }}
+                  aria-label="Leave project"
+                  className="ml-1 text-muted-foreground hover:text-foreground"
+                >
+                  ×
+                </button>
+              </span>
+            )}
             {config?.mocked && (
               <span className="rounded bg-secondary px-1.5 py-0.5 text-[10.5px] uppercase tracking-wide text-muted-foreground">
                 mock brain
@@ -448,6 +567,13 @@ export default function Chat() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={newChat}
+              data-testid="new-chat-button"
+              className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[12px] text-muted-foreground transition-colors duration-200 hover:bg-secondary hover:text-foreground"
+            >
+              <Plus className="h-3.5 w-3.5" /> New chat
+            </button>
             {voice.speaking && (
               <button
                 onClick={() => {
@@ -486,17 +612,31 @@ export default function Chat() {
             className="border-b border-border bg-secondary/60 px-5 py-2 text-center text-[12px] text-muted-foreground"
             data-testid="guest-banner"
           >
-            You're chatting as a guest on <strong className="font-medium">{models.find((m) => m.id === freeModel)?.name ?? "the free model"}</strong>. Nothing
-            is saved — <Link to="/login" className="text-clay underline">sign in</Link> to keep your
-            history and unlock tiers 2–5.
+            You're chatting as a guest on{" "}
+            <strong className="font-medium">
+              {models.find((m) => m.id === freeModel)?.name ?? "the free model"}
+            </strong>
+            . Nothing is saved —{" "}
+            <Link to="/login" className="text-clay underline">
+              sign in
+            </Link>{" "}
+            to keep your history, use projects and unlock tiers 2–5.
           </p>
         )}
 
         {empty ? (
-          <div className="flex flex-1 flex-col items-center justify-center px-6" data-testid="empty-state">
+          <div
+            className="flex flex-1 flex-col items-center justify-center px-6"
+            data-testid="empty-state"
+          >
             <h1 className="font-heading text-[30px] font-normal tracking-tight md:text-[34px]">
-              How can I help you today?
+              {activeProject ? activeProject.name : "How can I help you today?"}
             </h1>
+            {activeProject?.description && (
+              <p className="mt-2 max-w-xl text-center text-[13px] text-muted-foreground">
+                {activeProject.description}
+              </p>
+            )}
             <div className="mt-8 w-full max-w-2xl">{composer}</div>
             <div className="mt-5 flex max-w-2xl flex-wrap justify-center gap-2">
               {SUGGESTIONS.map((s) => (
@@ -540,8 +680,30 @@ export default function Chat() {
                         >
                           <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
                         </button>
-                        <div className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-[15px]">
-                          {m.content}
+                        <div>
+                          {(m.attachments ?? []).length > 0 && (
+                            <div
+                              className="mb-1.5 flex flex-wrap justify-end gap-1.5"
+                              data-testid="message-attachments"
+                            >
+                              {(m.attachments ?? []).map((a) => (
+                                <span
+                                  key={a.id}
+                                  className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11.5px]"
+                                >
+                                  {a.kind === "image" ? (
+                                    <ImageIcon className="h-3 w-3 text-muted-foreground" />
+                                  ) : (
+                                    <FileText className="h-3 w-3 text-muted-foreground" />
+                                  )}
+                                  {a.filename}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <div className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-[15px]">
+                            {m.content}
+                          </div>
                         </div>
                       </div>
                     ) : (

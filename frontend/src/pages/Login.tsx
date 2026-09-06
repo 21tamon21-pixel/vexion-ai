@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ApiError, apiPost } from "@/lib/api";
+import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAppConfig } from "@/hooks/useAuth";
 import type { User } from "@/types";
 
@@ -25,7 +25,15 @@ export default function Login() {
       const path = mode === "login" ? "/auth/login" : "/auth/signup";
       const body = mode === "login" ? { email, password } : { email, name, password };
       const user = await apiPost<User>(path, body);
-      qc.setQueryData(["me"], user);
+      // Confirm the session cookie actually stuck before navigating — an
+      // optimistic cache write used to hide a dropped cookie and every later
+      // write then failed with 401 ("could not start a chat").
+      const me = await apiGet<User | null>("/auth/me");
+      if (!me) {
+        toast.error("Signed in, but the session cookie was rejected by this browser");
+        return;
+      }
+      qc.setQueryData(["me"], me);
       await qc.invalidateQueries({ queryKey: ["conversations"] });
       toast.success(`Welcome, ${user.name}`);
       navigate("/", { replace: true });

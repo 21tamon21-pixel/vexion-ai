@@ -4,7 +4,8 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
-import { ChevronRight, X } from "lucide-react";
+import "katex/contrib/mhchem"; // \ce{...} chemistry support inside KaTeX
+import { ChevronRight, Download, X } from "lucide-react";
 import CodeBlock from "@/components/render/CodeBlock";
 import Mermaid from "@/components/render/Mermaid";
 
@@ -51,6 +52,16 @@ function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: ()
       >
         <X className="h-5 w-5" />
       </button>
+      <a
+        href={src}
+        download="vexion-image.png"
+        onClick={(e) => e.stopPropagation()}
+        data-testid="image-download-link"
+        aria-label="Download image"
+        className="absolute right-16 top-6 text-white/80 transition-colors hover:text-white"
+      >
+        <Download className="h-5 w-5" />
+      </a>
       <img src={src} alt={alt} className="max-h-full max-w-full rounded-lg" />
     </div>
   );
