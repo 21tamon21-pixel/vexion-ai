@@ -44,14 +44,16 @@ async def create_session(response: Response, user_id: str, secure: bool = True) 
             "expires_at": datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS),
         }
     )
-    # `secure` must follow the request scheme: a Secure cookie set over plain
-    # http is dropped by the browser, which used to leave the SPA "signed in"
-    # with no session cookie (every write then failed with 401).
+    # The app is served inside a cross-site preview iframe, where a SameSite=Lax
+    # cookie is never sent back — the session then looked "signed in" with no
+    # cookie and every write 401'd. Over https we therefore use SameSite=None
+    # (which requires Secure); on plain http we fall back to Lax + non-secure,
+    # because SameSite=None without Secure is rejected outright.
     response.set_cookie(
         SESSION_COOKIE,
         token,
         httponly=True,
-        samesite="lax",
+        samesite="none" if secure else "lax",
         secure=secure,
         max_age=SESSION_DAYS * 86400,
         path="/",

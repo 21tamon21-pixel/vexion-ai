@@ -117,7 +117,7 @@ export default function Sidebar({
         </Link>
         <Link to="/billing" className={navLink} data-testid="nav-billing">
           <CreditCard className="h-3.5 w-3.5 text-muted-foreground" /> Plan
-          <span className="ml-auto text-[11px] text-clay">{planName}</span>
+          <span className="ml-auto text-[11px] text-[#b8552f]">{planName}</span>
         </Link>
       </div>
 
@@ -191,7 +191,7 @@ export default function Sidebar({
                       }}
                       className="min-w-0 flex-1 truncate py-0.5 text-left text-[13px]"
                     >
-                      {c.pinned && <span className="mr-1 text-clay">•</span>}
+                      {c.pinned && <span className="mr-1 text-[#b8552f]">•</span>}
                       {c.title}
                     </button>
                     <button
@@ -200,7 +200,7 @@ export default function Sidebar({
                       onClick={() => patchConvo.mutate({ id: c.id, pinned: !c.pinned })}
                       className={`transition-opacity duration-200 ${
                         c.pinned
-                          ? "text-clay opacity-100"
+                          ? "text-[#b8552f] opacity-100"
                           : "text-muted-foreground opacity-0 group-hover:opacity-100"
                       }`}
                     >

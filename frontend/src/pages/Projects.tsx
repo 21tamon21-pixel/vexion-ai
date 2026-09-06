@@ -101,7 +101,7 @@ export default function Projects() {
               onClick={() => name.trim() && create.mutate()}
               disabled={!name.trim() || create.isPending}
               data-testid="create-project-button"
-              className="flex items-center gap-1.5 rounded-lg bg-clay px-4 py-2 text-[13px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg bg-[#b8552f] px-4 py-2 text-[13px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" /> Create project
             </button>
@@ -118,7 +118,7 @@ export default function Projects() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="flex items-center gap-2 text-[15px] font-medium">
-                    <FolderOpen className="h-4 w-4 text-clay" />
+                    <FolderOpen className="h-4 w-4 text-[#b8552f]" />
                     {p.name}
                   </h3>
                   {p.description && (
@@ -168,7 +168,7 @@ export default function Projects() {
                   <button
                     onClick={() => saveInstructions.mutate(p.id)}
                     data-testid="save-project-instructions-button"
-                    className="rounded-lg bg-clay px-4 py-2 text-[13px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29]"
+                    className="rounded-lg bg-[#b8552f] px-4 py-2 text-[13px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29]"
                   >
                     Save instructions
                   </button>

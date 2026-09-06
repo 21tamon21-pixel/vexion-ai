@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { apiPatch } from "@/lib/api";
+import { apiPatch, apiPost } from "@/lib/api";
 import { useAppConfig, useAuth } from "@/hooks/useAuth";
 import { ttsSupported, useVoice } from "@/hooks/useVoice";
 import type { User } from "@/types";
@@ -24,6 +24,7 @@ export default function Settings() {
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [voiceName, setVoiceName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [ownerCode, setOwnerCode] = useState("");
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
@@ -157,8 +158,9 @@ export default function Settings() {
         <section className={`mt-4 ${card}`} data-testid="models-section">
           <h2 className="text-[13px] font-semibold">Models</h2>
           <p className="mt-1 text-[12.5px] text-muted-foreground">
-            Tier 1 is free and open to guests. Tiers 2–5 need an account; paid plans are not
-            connected yet, so every tier is currently available to signed-in users.
+            Tier 1 is free and open to guests. Higher tiers need an account and a plan that reaches
+            that tier — the backend re-checks your entitlement on every request. A model shows
+            “no key” until its provider key is configured on the server.
           </p>
           <ul className="mt-4 space-y-2.5">
             {(config?.models ?? []).map((m) => (
@@ -168,11 +170,74 @@ export default function Settings() {
                 </span>
                 <span>
                   <span className="text-[13.5px] font-medium">{m.name}</span>
-                  <span className="block text-[12.5px] text-muted-foreground">{m.tagline}</span>
+                  <span className="ml-1.5 text-[11.5px] text-muted-foreground">
+                    {m.provider_label}
+                  </span>
+                  {m.premium && (
+                    <span className="ml-1.5 rounded bg-[#f6e7df] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[#8a3f22]">
+                      premium
+                    </span>
+                  )}
+                  <span className="block text-[12.5px] text-muted-foreground">
+                    {m.available ? m.tagline : m.unavailable_reason}
+                  </span>
                 </span>
               </li>
             ))}
           </ul>
+        </section>
+
+        <section className={`mt-4 space-y-3 ${card}`} data-testid="owner-section">
+          <h2 className="text-[13px] font-semibold">Owner access</h2>
+          <p className="text-[12.5px] text-muted-foreground">
+            {user?.owner
+              ? "Owner mode is active: every model tier and the highest limits are unlocked for testing."
+              : "Enter the owner code to unlock premium features for testing. The code is verified on the server and never stored in the frontend."}
+          </p>
+          {user?.owner ? (
+            <button
+              onClick={async () => {
+                try {
+                  const updated = await apiPost<User>("/auth/owner-lock");
+                  qc.setQueryData(["me"], updated);
+                  toast.success("Owner mode disabled");
+                } catch {
+                  toast.error("Could not change owner mode");
+                }
+              }}
+              data-testid="owner-lock-button"
+              className="rounded-lg border border-border px-3 py-1.5 text-[12.5px] transition-colors duration-200 hover:bg-secondary"
+            >
+              Disable owner mode
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                value={ownerCode}
+                onChange={(e) => setOwnerCode(e.target.value)}
+                type="password"
+                placeholder="Owner code"
+                data-testid="owner-code-input"
+                className={field}
+              />
+              <button
+                onClick={async () => {
+                  try {
+                    const updated = await apiPost<User>("/auth/owner-unlock", { code: ownerCode });
+                    qc.setQueryData(["me"], updated);
+                    setOwnerCode("");
+                    toast.success("Owner mode unlocked");
+                  } catch {
+                    toast.error("Invalid owner code");
+                  }
+                }}
+                data-testid="owner-unlock-button"
+                className="shrink-0 rounded-lg bg-[#b8552f] px-4 py-2 text-[12.5px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29]"
+              >
+                Unlock
+              </button>
+            </div>
+          )}
         </section>
 
         <section className={`mt-4 ${card}`} data-testid="system-section">
@@ -183,7 +248,7 @@ export default function Settings() {
             <dt className="text-muted-foreground">Provider</dt>
             <dd data-testid="settings-provider">{config?.provider ?? "—"}</dd>
             <dt className="text-muted-foreground">Provider connected</dt>
-            <dd className={config?.provider_ready ? "text-[#3f6b45]" : "text-clay"}>
+            <dd className={config?.provider_ready ? "text-[#3f6b45]" : "text-[#b8552f]"}>
               {config?.provider_ready ? "yes" : "no — mock responder active"}
             </dd>
             {config &&
@@ -202,7 +267,7 @@ export default function Settings() {
           onClick={save}
           disabled={saving}
           data-testid="save-settings-button"
-          className="mt-6 rounded-lg bg-clay px-5 py-2.5 text-sm font-medium text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:opacity-50"
+          className="mt-6 rounded-lg bg-[#b8552f] px-5 py-2.5 text-sm font-medium text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save"}
         </button>

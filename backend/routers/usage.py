@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends
 
 from lib.db import db
+from lib.entitlements import limits_for, usage_snapshot
 from lib.models_catalog import get_model
 from lib.security import current_user
 from models.schemas import ModelUsage, UsageSummary
@@ -24,7 +25,6 @@ async def summary(user: Dict[str, Any] = Depends(current_user)):
         if convo_ids
         else []
     )
-
     per_model: Dict[str, Dict[str, int]] = defaultdict(lambda: {"messages": 0, "tokens": 0})
     per_day: Dict[str, int] = defaultdict(int)
     images = 0
@@ -55,7 +55,38 @@ async def summary(user: Dict[str, Any] = Depends(current_user)):
     ]
     by_day = [{"day": d, "messages": per_day[d]} for d in sorted(per_day)][-14:]
 
+    # storage: attachments owned by the user + generated images inlined in messages
+    atts = await db.attachments.find({"user_id": user["id"]}).to_list(5000)
+    attachment_bytes = sum(int(a.get("size", 0)) for a in atts)
+    inline_image_bytes = sum(
+        len(m.get("content", "")) for m in msgs if "data:image/" in m.get("content", "")
+    )
+    lim = limits_for(user)
+    cache_docs = await db.research_cache.find({}).to_list(2000)
+    cache_bytes = sum(
+        len(c.get("answer", "")) + sum(len(s.get("snippet", "")) for s in c.get("sources", []))
+        for c in cache_docs
+    )
+
+    quotas = await usage_snapshot(user)
+    storage = {
+        "used_bytes": attachment_bytes + inline_image_bytes,
+        "total_bytes": lim["storage_bytes"],
+        "attachment_bytes": attachment_bytes,
+        "project_bytes": inline_image_bytes,
+        "files": len(atts),
+    }
+    cache = {
+        "used_bytes": cache_bytes,
+        "total_bytes": lim["cache_bytes"],
+        "items": len(cache_docs),
+        "ttl_minutes": int(__import__("os").environ.get("TAVILY_CACHE_TTL_MIN", "1440")),
+    }
+
     return UsageSummary(
+        quotas=quotas,
+        storage=storage,
+        cache=cache,
         total_messages=len(msgs),
         total_conversations=len(convos),
         total_projects=projects,

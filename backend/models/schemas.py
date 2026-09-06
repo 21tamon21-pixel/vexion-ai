@@ -36,6 +36,7 @@ class User(BaseModel):
     created_at: datetime = Field(default_factory=_now)
     persona: Persona = Field(default_factory=Persona)
     subscription: "Subscription" = Field(default_factory=lambda: Subscription())
+    owner: bool = False
 
 
 class SignupRequest(BaseModel):
@@ -138,6 +139,10 @@ class UsageSummary(BaseModel):
     approx_tokens: int
     by_model: List[ModelUsage]
     by_day: List[Dict[str, Any]]
+    # entitlement + resource snapshot (see lib/entitlements.py)
+    quotas: Dict[str, Any] = Field(default_factory=dict)
+    storage: Dict[str, Any] = Field(default_factory=dict)
+    cache: Dict[str, Any] = Field(default_factory=dict)
 
 
 class PluginConnectionCreate(BaseModel):

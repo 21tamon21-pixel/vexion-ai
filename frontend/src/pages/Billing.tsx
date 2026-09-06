@@ -109,7 +109,7 @@ export default function Billing() {
                 key={p.id}
                 data-testid={`plan-${p.id}`}
                 className={`flex flex-col rounded-xl border bg-card p-5 ${
-                  active ? "border-clay" : "border-border"
+                  active ? "border-[#b8552f]" : "border-border"
                 }`}
               >
                 <h2 className="font-heading text-lg font-semibold">{p.name}</h2>
@@ -122,7 +122,7 @@ export default function Billing() {
                 <ul className="mt-3 flex-1 space-y-1.5">
                   {p.features.map((f) => (
                     <li key={f} className="flex gap-2 text-[12.5px] text-muted-foreground">
-                      <Check className="mt-0.5 h-3 w-3 shrink-0 text-clay" /> {f}
+                      <Check className="mt-0.5 h-3 w-3 shrink-0 text-[#b8552f]" /> {f}
                     </li>
                   ))}
                 </ul>
@@ -146,7 +146,7 @@ export default function Billing() {
                     onClick={() => void subscribe(p.id)}
                     disabled={busy === p.id}
                     data-testid={`subscribe-${p.id}-button`}
-                    className="mt-4 rounded-lg bg-clay py-2 text-[12.5px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:opacity-50"
+                    className="mt-4 rounded-lg bg-[#b8552f] py-2 text-[12.5px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:opacity-50"
                   >
                     {busy === p.id ? "Opening PayPal…" : `Pay with PayPal`}
                   </button>
@@ -166,7 +166,7 @@ export default function Billing() {
             <dt className="text-muted-foreground">PayPal environment</dt>
             <dd>{billing.data?.paypal_env ?? "—"}</dd>
             <dt className="text-muted-foreground">PayPal configured</dt>
-            <dd className={billing.data?.paypal_configured ? "text-[#3f6b45]" : "text-clay"}>
+            <dd className={billing.data?.paypal_configured ? "text-[#3f6b45]" : "text-[#b8552f]"}>
               {billing.data?.paypal_configured ? "yes" : "no"}
             </dd>
           </dl>

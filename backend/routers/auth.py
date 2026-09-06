@@ -1,5 +1,10 @@
+import hmac
+
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, Field
 from typing import Any, Dict, Optional
+
+from lib.entitlements import owner_code
 
 from lib.db import db
 from lib.security import (
@@ -58,6 +63,31 @@ async def logout(response: Response, vexion_session: Optional[str] = Cookie(defa
 @router.get("/me", response_model=Optional[User])
 async def me(user: Optional[Dict[str, Any]] = Depends(optional_user)):
     return _public(user) if user else None
+
+
+class OwnerUnlockRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=200)
+
+
+@router.post("/owner-unlock", response_model=User)
+async def owner_unlock(
+    payload: OwnerUnlockRequest, user: Dict[str, Any] = Depends(current_user)
+):
+    """Validates OWNER_CODE server-side. The code is never sent to the browser,
+    never returned in a response and never compared in frontend code."""
+    expected = owner_code()
+    if not expected:
+        raise HTTPException(status_code=503, detail="Owner access is not configured")
+    if not hmac.compare_digest(payload.code.strip(), expected):
+        raise HTTPException(status_code=403, detail="Invalid owner code")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"owner": True}})
+    return _public(await db.users.find_one({"id": user["id"]}))
+
+
+@router.post("/owner-lock", response_model=User)
+async def owner_lock(user: Dict[str, Any] = Depends(current_user)):
+    await db.users.update_one({"id": user["id"]}, {"$set": {"owner": False}})
+    return _public(await db.users.find_one({"id": user["id"]}))
 
 
 @router.patch("/persona", response_model=User)

@@ -70,6 +70,7 @@ from routers.conversations import router as conversations_router
 from routers.images import router as images_router
 from routers.plugins import router as plugins_router
 from routers.projects import router as projects_router
+from routers.research import router as research_router
 from routers.usage import router as usage_router
 
 
@@ -86,6 +87,7 @@ api_router.include_router(chat_router)
 api_router.include_router(images_router)
 api_router.include_router(attachments_router)
 api_router.include_router(usage_router)
+api_router.include_router(research_router)
 api_router.include_router(billing_router)
 api_router.include_router(plugins_router)
 api_router.include_router(bridge_router)

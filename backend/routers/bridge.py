@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from lib import config
 from lib.db import db
 from lib.models_catalog import get_model
-from lib.plans import max_tier_for
+from lib.entitlements import tier_ceiling
 from lib.providers import get_provider
 from lib.security import bearer_connection
 
@@ -111,9 +111,8 @@ async def ask(payload: AskRequest, conn: Dict[str, Any] = Depends(bearer_connect
         raise HTTPException(status_code=413, detail="Attached files exceed 200 KB")
 
     owner = await db.users.find_one({"id": conn["user_id"]})
-    plan_id = ((owner or {}).get("subscription") or {}).get("plan_id", "free")
     spec = get_model(payload.model_id)
-    if spec["tier"] > max_tier_for(plan_id):
+    if spec["tier"] > tier_ceiling(owner or {}):
         raise HTTPException(
             status_code=402,
             detail=f"{spec['name']} needs a higher plan than the operator's current one",
@@ -148,7 +147,7 @@ async def ask(payload: AskRequest, conn: Dict[str, Any] = Depends(bearer_connect
     if observed:
         prompt = f"Recent observations from the connected app:\n{observed}\n\n{prompt}"
 
-    provider = get_provider()
+    provider = get_provider(spec["vendor"])
     answer = ""
     async for delta in provider.stream(system, [{"role": "user", "content": prompt}], spec["vendor"], spec["model"]):
         answer += delta

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
-import { ArrowUp, FileText, Loader2, Mic, MicOff, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, FileText, Globe, Loader2, Mic, MicOff, Paperclip, Square, X } from "lucide-react";
 import ModelPicker from "@/components/ModelPicker";
 import type { Attachment, ModelInfo } from "@/types";
 
@@ -32,6 +32,9 @@ interface Props {
   onFiles: (files: File[]) => void;
   onRemoveAttachment: (id: string) => void;
   uploading: boolean;
+  maxTier: number;
+  researchOn: boolean;
+  onToggleResearch: () => void;
   autoFocus?: boolean;
 }
 
@@ -53,6 +56,9 @@ export default function ChatInput({
   onFiles,
   onRemoveAttachment,
   uploading,
+  maxTier,
+  researchOn,
+  onToggleResearch,
   autoFocus,
 }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -111,7 +117,7 @@ export default function ChatInput({
               }}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-200 hover:bg-secondary"
             >
-              <span className="font-mono text-xs text-clay">{s.cmd}</span>
+              <span className="font-mono text-xs text-[#b8552f]">{s.cmd}</span>
               <span className="text-xs text-muted-foreground">{s.hint}</span>
             </button>
           ))}
@@ -126,7 +132,7 @@ export default function ChatInput({
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
         className={`rounded-2xl border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors duration-200 ${
-          dragging ? "border-clay" : "border-border focus-within:border-[#d5cfc4]"
+          dragging ? "border-[#b8552f]" : "border-border focus-within:border-[#d5cfc4]"
         }`}
       >
         {(attachments.length > 0 || uploading) && (
@@ -197,6 +203,7 @@ export default function ChatInput({
               onSelect={onSelectModel}
               authenticated={authenticated}
               onLockedPick={onLockedPick}
+              maxTier={maxTier}
             />
             <input
               ref={fileRef}
@@ -211,6 +218,20 @@ export default function ChatInput({
                 e.target.value = "";
               }}
             />
+            <button
+              type="button"
+              onClick={onToggleResearch}
+              data-testid="research-toggle"
+              aria-pressed={researchOn}
+              title="Research this with Tavily web search before answering"
+              className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] transition-colors duration-200 ${
+                researchOn
+                  ? "bg-[#f6e7df] text-[#8a3f22]"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              }`}
+            >
+              <Globe className="h-3.5 w-3.5" /> Research
+            </button>
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -238,7 +259,7 @@ export default function ChatInput({
               title={micAvailable ? "Voice input" : "Speech recognition unavailable in this browser"}
               className={`rounded-lg p-2 transition-colors duration-200 disabled:opacity-35 ${
                 listening
-                  ? "bg-[#f6e7df] text-clay"
+                  ? "bg-[#f6e7df] text-[#b8552f]"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground"
               }`}
             >
@@ -260,7 +281,7 @@ export default function ChatInput({
                 disabled={!value.trim() && attachments.length === 0}
                 data-testid="send-button"
                 aria-label="Send message"
-                className="rounded-lg bg-clay p-2 text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
+                className="rounded-lg bg-[#b8552f] p-2 text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
               >
                 <ArrowUp className="h-4 w-4" />
               </button>

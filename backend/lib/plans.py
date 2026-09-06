@@ -16,9 +16,10 @@ PLANS: List[Dict[str, Any]] = [
         "max_tier": 3,
         "features": [
             "Lumen, Quartz and Orion (tiers 1-3)",
-            "Unlimited saved chats and projects",
-            "Image generation",
-            "Voice input and output",
+            "60 messages/day · 800/month",
+            "5 Tavily researches/day · 40/month",
+            "250 MB storage · 20 MB research cache",
+            "Projects, image generation, voice",
         ],
     },
     {
@@ -29,9 +30,10 @@ PLANS: List[Dict[str, Any]] = [
         "max_tier": 4,
         "features": [
             "Everything in Free",
-            "Solace (tier 4) for deep analysis",
-            "Plugin connections for your own tools",
-            "Priority streaming",
+            "Solace (tier 4) and Groq Volt",
+            "400 messages/day · 6,000/month",
+            "40 Tavily researches/day · 400/month",
+            "5 GB storage · 200 MB research cache",
         ],
     },
     {
@@ -42,9 +44,10 @@ PLANS: List[Dict[str, Any]] = [
         "max_tier": 5,
         "features": [
             "Everything in Core",
-            "Aether (tier 5) — the sharpest core",
-            "Unlimited plugin connections",
-            "Early access to new capabilities",
+            "Aether 5.0 Apex (tier 5) — the sharpest core",
+            "1,500 messages/day · 25,000/month",
+            "120 Tavily researches/day · 1,500/month",
+            "10 GB storage · 1 GB research cache",
         ],
     },
 ]

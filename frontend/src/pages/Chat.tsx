@@ -22,6 +22,7 @@ import Sidebar from "@/components/Sidebar";
 import ChatInput from "@/components/ChatInput";
 import CommandPalette, { type PaletteAction } from "@/components/CommandPalette";
 import MessageRenderer from "@/components/render/MessageRenderer";
+import { ProviderIcon } from "@/components/ModelPicker";
 import type {
   AppConfig,
   AppState,
@@ -32,6 +33,8 @@ import type {
   Message,
   ModelInfo,
   Project,
+  ResearchResult,
+  ResearchState,
 } from "@/types";
 
 const SUGGESTIONS = [
@@ -87,6 +90,7 @@ export default function Chat() {
   const [uploading, setUploading] = useState(false);
   const [state, setState] = useState<AppState>("idle");
   const [pinnedToBottom, setPinnedToBottom] = useState(true);
+  const [researchOn, setResearchOn] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
@@ -116,6 +120,18 @@ export default function Chat() {
     () => (projects.data ?? []).find((p) => p.id === projectId) ?? null,
     [projects.data, projectId],
   );
+
+  const research = useQuery({
+    queryKey: ["research-state"],
+    queryFn: () => apiGet<ResearchState>("/research/state"),
+    enabled: authenticated,
+  });
+
+  const maxTier = useMemo(() => {
+    if (user?.owner) return 5;
+    const planId = user?.subscription?.plan_id ?? "free";
+    return config?.plans.find((p) => p.id === planId)?.max_tier ?? (authenticated ? 3 : 1);
+  }, [authenticated, config, user]);
 
   const detail = useQuery({
     queryKey: ["conversation", activeId],
@@ -269,6 +285,28 @@ export default function Chat() {
       setInput("");
       setPinnedToBottom(true);
 
+      // Web research (Tavily) runs first and its sources are handed to the model.
+      let researchBlock = "";
+      if (researchOn && authenticated) {
+        try {
+          const found = await apiPost<ResearchResult>("/research", { query: text });
+          researchBlock =
+            `### WEB RESEARCH (Tavily${found.cached ? ", cached" : ""})\n` +
+            (found.answer ? `${found.answer}\n\n` : "") +
+            found.sources
+              .map((src, i) => `[${i + 1}] ${src.title} — ${src.url}\n${src.snippet}`)
+              .join("\n\n");
+          toast.success(
+            found.cached
+              ? "Used a cached research result — no credit spent"
+              : `Researched — ${found.daily_remaining} searches left today`,
+          );
+          qc.invalidateQueries({ queryKey: ["research-state"] });
+        } catch (err) {
+          toast.error(detailOf(err, "Research unavailable"));
+        }
+      }
+
       let cid = activeId;
       if (authenticated) {
         cid = await ensureConversation();
@@ -313,14 +351,18 @@ export default function Chat() {
       let buffer = "";
 
       const path = authenticated ? `/chat/${cid}/stream` : "/chat/guest/stream";
+      const outgoing = researchBlock
+        ? `${researchBlock}\n\n---\nUsing the research above (cite sources as [n]), answer: ${text}`
+        : text;
+
       const body = authenticated
         ? {
-            content: text || "Please look at the attached file.",
+            content: outgoing || "Please look at the attached file.",
             from_message_id: fromMessageId,
             model_id: selectedModel,
             attachment_ids: sentAttachments.map((a) => a.id),
           }
-        : { content: text, history: historySnapshot };
+        : { content: outgoing, history: historySnapshot };
 
       try {
         await streamChat(path, body, controller.signal, {
@@ -398,6 +440,7 @@ export default function Chat() {
       newChat,
       persona,
       qc,
+      researchOn,
       selectedModel,
       voice,
     ],
@@ -490,15 +533,31 @@ export default function Chat() {
       selectedModel={selectedModel}
       onSelectModel={setSelectedModel}
       authenticated={authenticated}
-      onLockedPick={(m) =>
-        toast.info(`${m.name} is tier ${m.tier} — sign in to unlock it`, {
-          description: "A free account also keeps your chat history.",
-        })
-      }
+      onLockedPick={(m) => {
+        if (!m.available) toast.error(m.unavailable_reason);
+        else if (!authenticated) toast.info(`${m.name} needs an account — sign in to unlock it`);
+        else
+          toast.info(`${m.name} is included from the ${m.plan_required} plan`, {
+            description: "Open Plan in the sidebar to upgrade.",
+          });
+      }}
       attachments={attachments}
       onFiles={(files) => void uploadFiles(files)}
       onRemoveAttachment={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
       uploading={uploading}
+      maxTier={maxTier}
+      researchOn={researchOn}
+      onToggleResearch={() => {
+        if (!authenticated) {
+          toast.info("Web research needs an account");
+          return;
+        }
+        if (!research.data?.configured) {
+          toast.error("Web research is not configured — add TAVILY_API_KEY to backend/.env");
+          return;
+        }
+        setResearchOn((v) => !v);
+      }}
       autoFocus={empty}
     />
   );
@@ -546,7 +605,7 @@ export default function Chat() {
                 className="flex items-center gap-1.5 rounded-md bg-secondary px-2 py-0.5 text-[11.5px]"
                 data-testid="active-project-badge"
               >
-                <FolderOpen className="h-3 w-3 text-clay" /> {activeProject.name}
+                <FolderOpen className="h-3 w-3 text-[#b8552f]" /> {activeProject.name}
                 <button
                   onClick={() => {
                     setParams({});
@@ -557,6 +616,15 @@ export default function Chat() {
                 >
                   ×
                 </button>
+              </span>
+            )}
+            {researchOn && (
+              <span
+                className="flex items-center gap-1.5 rounded-md bg-[#f6e7df] px-2 py-0.5 text-[11.5px] text-[#8a3f22]"
+                data-testid="research-indicator"
+              >
+                <ProviderIcon icon="spark" size="xs" /> Tavily research on
+                {research.data ? ` · ${research.data.daily_remaining} left today` : ""}
               </span>
             )}
             {config?.mocked && (
@@ -599,7 +667,7 @@ export default function Chat() {
               <Link
                 to="/login"
                 data-testid="header-signin-link"
-                className="rounded-lg bg-clay px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29]"
+                className="rounded-lg bg-[#b8552f] px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29]"
               >
                 Sign in
               </Link>
@@ -617,7 +685,7 @@ export default function Chat() {
               {models.find((m) => m.id === freeModel)?.name ?? "the free model"}
             </strong>
             . Nothing is saved —{" "}
-            <Link to="/login" className="text-clay underline">
+            <Link to="/login" className="text-[#b8552f] underline">
               sign in
             </Link>{" "}
             to keep your history, use projects and unlock tiers 2–5.

@@ -25,6 +25,7 @@ export interface User {
   created_at: string;
   persona: Persona;
   subscription: Subscription;
+  owner: boolean;
 }
 
 export interface Conversation {
@@ -89,6 +90,47 @@ export interface ModelInfo {
   requires_auth: boolean;
   plan_required: string;
   capabilities: string[];
+  provider: string;
+  provider_label: string;
+  icon: string;
+  premium: boolean;
+  available: boolean;
+  own_key: boolean;
+  unavailable_reason: string;
+}
+
+/** mirrors routers/research.ResearchResult */
+export interface ResearchSource {
+  title: string;
+  url: string;
+  snippet: string;
+  score: number;
+}
+
+export interface ResearchResult {
+  query: string;
+  answer: string;
+  sources: ResearchSource[];
+  cached: boolean;
+  provider: string;
+  daily_remaining: number;
+  monthly_remaining: number;
+  resets_at: string;
+}
+
+export interface ResearchState {
+  configured: boolean;
+  daily_used: number;
+  daily_limit: number;
+  daily_remaining: number;
+  monthly_used: number;
+  monthly_limit: number;
+  monthly_remaining: number;
+  project_daily_used: number;
+  project_daily_limit: number;
+  cache_ttl_minutes: number;
+  cached_items: number;
+  resets_at: string;
 }
 
 export interface PlanInfo {
@@ -150,6 +192,44 @@ export interface ModelUsage {
   approx_tokens: number;
 }
 
+export interface QuotaWindow {
+  daily_used: number;
+  daily_limit: number;
+  monthly_used: number;
+  monthly_limit: number;
+}
+
+export interface TavilyQuota extends QuotaWindow {
+  project_daily_used: number;
+  project_daily_limit: number;
+  project_monthly_used: number;
+  project_monthly_limit: number;
+}
+
+export interface Quotas {
+  plan: string;
+  owner: boolean;
+  resets_at: string;
+  ai: QuotaWindow;
+  tavily: TavilyQuota;
+  limits: Record<string, number>;
+}
+
+export interface StorageInfo {
+  used_bytes: number;
+  total_bytes: number;
+  attachment_bytes: number;
+  project_bytes: number;
+  files: number;
+}
+
+export interface CacheInfo {
+  used_bytes: number;
+  total_bytes: number;
+  items: number;
+  ttl_minutes: number;
+}
+
 export interface UsageSummary {
   total_messages: number;
   total_conversations: number;
@@ -158,6 +238,9 @@ export interface UsageSummary {
   approx_tokens: number;
   by_model: ModelUsage[];
   by_day: { day: string; messages: number }[];
+  quotas: Quotas;
+  storage: StorageInfo;
+  cache: CacheInfo;
 }
 
 /** mirrors routers/billing.BillingState */

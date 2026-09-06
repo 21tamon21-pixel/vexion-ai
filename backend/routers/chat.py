@@ -19,8 +19,8 @@ from pydantic import BaseModel, Field
 
 from lib import config
 from lib.db import db
-from lib.models_catalog import FREE_MODEL_ID, get_model
-from lib.plans import max_tier_for
+from lib.entitlements import bump, count, day_key, limits_for, month_key, tier_ceiling
+from lib.models_catalog import FREE_MODEL_ID, get_model, is_available
 from lib.providers import get_provider
 from lib.security import current_user
 from models.schemas import AttachmentRef, Message, Persona, SendMessageRequest
@@ -51,19 +51,37 @@ def _build_system(persona: Persona) -> str:
     return "\n\n".join(parts)
 
 
-def _resolve_model(model_id: Optional[str], authenticated: bool, plan_id: str = "free") -> Dict[str, Any]:
+def _resolve_model(
+    model_id: Optional[str], authenticated: bool, user: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """The authoritative entitlement check — the UI's locks are cosmetic."""
     spec = get_model(model_id)
     if spec["requires_auth"] and not authenticated:
         raise HTTPException(
             status_code=403,
             detail=f"{spec['name']} requires an account. Sign in to unlock tier {spec['tier']}.",
         )
-    if authenticated and spec["tier"] > max_tier_for(plan_id):
+    if not is_available(spec):
+        raise HTTPException(
+            status_code=503,
+            detail=f"{spec['name']} is unavailable — its provider key is not configured.",
+        )
+    if authenticated and user is not None and spec["tier"] > tier_ceiling(user):
         raise HTTPException(
             status_code=402,
             detail=f"{spec['name']} (tier {spec['tier']}) needs a higher plan. Upgrade to use it.",
         )
     return spec
+
+
+async def _check_ai_quota(user: Dict[str, Any]) -> None:
+    lim = limits_for(user)
+    if await count("ai", user["id"], day_key()) >= lim["ai_daily"]:
+        raise HTTPException(status_code=429, detail=f"Daily AI limit reached ({lim['ai_daily']}).")
+    if await count("ai", user["id"], month_key()) >= lim["ai_monthly"]:
+        raise HTTPException(
+            status_code=429, detail=f"Monthly AI limit reached ({lim['ai_monthly']})."
+        )
 
 
 async def _load_attachments(ids: List[str], user_id: str) -> tuple[List[str], str, List[Dict[str, str]]]:
@@ -97,7 +115,7 @@ async def stream_guest(payload: GuestStreamRequest):
     )
     history = [{"role": t.role, "content": t.content} for t in payload.history[-MAX_HISTORY:]]
     history.append({"role": "user", "content": payload.content})
-    provider = get_provider()
+    provider = get_provider(spec["vendor"])
     message_id = Message(conversation_id="guest", role="assistant", content="").id
 
     async def generator() -> AsyncIterator[str]:
@@ -145,11 +163,10 @@ async def stream_chat(
     if not convo:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    spec = _resolve_model(
-        payload.model_id,
-        authenticated=True,
-        plan_id=(user.get("subscription") or {}).get("plan_id", "free"),
-    )
+    spec = _resolve_model(payload.model_id, authenticated=True, user=user)
+    await _check_ai_quota(user)
+    await bump("ai", user["id"], day_key())
+    await bump("ai", user["id"], month_key())
 
     images, doc_text, refs = await _load_attachments(payload.attachment_ids, user["id"])
 
@@ -210,7 +227,7 @@ async def stream_chat(
         status="streaming",
         model_id=spec["id"],
     )
-    provider = get_provider()
+    provider = get_provider(spec["vendor"])
 
     async def generator() -> AsyncIterator[str]:
         buffer = ""

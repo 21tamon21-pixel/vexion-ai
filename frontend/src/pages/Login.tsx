@@ -96,7 +96,7 @@ export default function Login() {
             type="submit"
             disabled={busy}
             data-testid="auth-submit-button"
-            className="w-full rounded-lg bg-clay py-2.5 text-sm font-medium text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:opacity-50"
+            className="w-full rounded-lg bg-[#b8552f] py-2.5 text-sm font-medium text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:opacity-50"
           >
             {busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
           </button>
@@ -114,7 +114,7 @@ export default function Login() {
         <Link
           to="/"
           data-testid="continue-as-guest-link"
-          className="mt-6 block text-center text-[12.5px] text-clay underline"
+          className="mt-6 block text-center text-[12.5px] text-[#b8552f] underline"
         >
           Continue as a guest instead
         </Link>

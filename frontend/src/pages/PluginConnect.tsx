@@ -171,7 +171,7 @@ export default function PluginConnect() {
               onClick={() => label.trim() && connect.mutate()}
               disabled={!label.trim() || connect.isPending}
               data-testid="create-connection-button"
-              className="mt-2 rounded-lg bg-clay px-5 py-2.5 text-[13px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:opacity-50"
+              className="mt-2 rounded-lg bg-[#b8552f] px-5 py-2.5 text-[13px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29] disabled:opacity-50"
             >
               {connect.isPending ? "Creating…" : "Create connection"}
             </button>
@@ -227,7 +227,7 @@ export default function PluginConnect() {
             <Link
               to="/plugins"
               data-testid="finish-connect-link"
-              className="inline-block rounded-lg bg-clay px-5 py-2.5 text-[13px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29]"
+              className="inline-block rounded-lg bg-[#b8552f] px-5 py-2.5 text-[13px] font-medium text-white transition-colors duration-200 hover:bg-[#a34c29]"
             >
               Done
             </Link>
